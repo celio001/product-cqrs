@@ -7,6 +7,7 @@ CREATE TABLE categories (
     parent_id UUID REFERENCES categories(id) ON DELETE SET NULL,
     name VARCHAR(100) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, 
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 
@@ -15,6 +16,7 @@ CREATE TABLE brands (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 
@@ -68,5 +70,6 @@ CREATE TABLE product_fiscal_data (
     icms_rate DECIMAL(5,2) DEFAULT 0.00,
     pis_rate DECIMAL(5,2) DEFAULT 0.00,
     cofins_rate DECIMAL(5,2) DEFAULT 0.00,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ipi_rate DECIMAL(5,2) DEFAULT 0.00
 );
