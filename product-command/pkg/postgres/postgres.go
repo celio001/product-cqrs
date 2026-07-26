@@ -1,29 +1,38 @@
 package postgres
 
 import (
-	"database/sql"
-	"errors"
+	"context"
 	"time"
 
-	"github.com/celio001/product-command/config"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func ConectPostgres() (*sql.DB, error) {
-	dsn := config.GetString("POSTGRES_DB_DSN")
-	if dsn == "" {
-		return nil, errors.New("Empty Postgres DSN")
-	}
-	db, err := sql.Open("postgres", dsn)
+func ConectPostgres(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+
+	// dsn := config.GetString("POSTGRES_DB_DSN")
+	// if dsn == "" {
+	// 	return nil, errors.New("Empty Postgres DSN")
+	// }
+	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(5)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
 
-	if err := db.Ping(); err != nil {
+	cfg.MaxConns = 5
+	cfg.MinConns = 2
+	cfg.MaxConnLifetime = 1 * time.Hour
+	cfg.MaxConnIdleTime = 15 * time.Minute
+	cfg.HealthCheckPeriod = 30 * time.Second
+
+	dbPool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
 		return nil, err
 	}
 
-	return db, nil
+	if err := dbPool.Ping(ctx); err != nil {
+		dbPool.Close()
+		return nil, err
+	}
+
+	return dbPool, nil
 }
