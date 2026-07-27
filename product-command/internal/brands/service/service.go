@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
+
+	"github.com/google/uuid"
 
 	"github.com/celio001/product-command/internal/brands"
 	"github.com/celio001/product-command/internal/brands/repository"
@@ -15,6 +18,7 @@ type brandSvc struct {
 
 type BrandSvcInterface interface {
 	CreateBrandSvc(ctx context.Context, brand brands.Brand) (brands.Brand, error)
+	SoftDeleteBrandSvc(ctx context.Context, id uuid.UUID) error
 }
 
 func NewBrandSvc(repo repository.BrandsRepoInterface) BrandSvcInterface {
@@ -29,4 +33,28 @@ func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (bran
 	}
 
 	return bCreated, nil
+}
+
+func (b *brandSvc) SoftDeleteBrandSvc(ctx context.Context, id uuid.UUID) error {
+	brand, err := b.repo.GetBrandByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrBrandNotFound) {
+			logger.Error("error get brand not found", zap.String("error", err.Error()))
+			return err
+		} else {
+			logger.Error("error get brand to delete", zap.String("error", err.Error()))
+			return err
+		}
+	}
+	err = b.repo.SoftDeleteBrand(ctx, brand.ID)
+	if err != nil {
+		if errors.Is(err, repository.ErrBrandNotFound) {
+			logger.Error("error delete brand not found", zap.String("error", err.Error()))
+			return err
+		} else {
+			logger.Error("error delete brand", zap.String("error", err.Error()))
+			return err
+		}
+	}
+	return nil
 }
