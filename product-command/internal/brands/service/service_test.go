@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/celio001/product-command/internal/brands"
+	brandsRepo "github.com/celio001/product-command/internal/brands/repository"
 	brands_mocks "github.com/celio001/product-command/internal/brands/repository/mocks"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
@@ -14,7 +15,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestCreateBrands(t *testing.T) {
+func TestCreateBrandsSvc(t *testing.T) {
 	logger.Init("product-command", "1.0.0", "development")
 	tests := []struct {
 		name             string
@@ -49,20 +50,100 @@ func TestCreateBrands(t *testing.T) {
 
 		mockRepo := brands_mocks.NewMockBrandsRepoInterface(ctrl)
 		mockRepo.EXPECT().
-			CreateBrand(tt.ctx ,tt.brand).
+			CreateBrand(tt.ctx, tt.brand).
 			Return(tt.mockBrandsReturn, tt.mockError).
 			Times(1)
-		
+
 		svc := NewBrandSvc(mockRepo)
 		brand, err := svc.CreateBrandSvc(tt.ctx, tt.brand)
 
 		if tt.expectedError {
 			assert.Error(t, err)
 			assert.Equal(t, brands.Brand{}, brand)
-		} else if !tt.expectedError{
+		} else if !tt.expectedError {
 			assert.NoError(t, err)
 			assert.IsType(t, brand, brands.Brand{})
 			assert.Equal(t, brand.Name, brand.Name)
 		}
+	}
+}
+
+func TestSoftDeleteBrandSvc(t *testing.T) {
+	logger.Init("product-command", "1.0.0", "development")
+	uuid := uuid.New()
+	tests := []struct {
+		name                      string
+		ctx                       context.Context
+		mockGetBrandByIDReturn    brands.Brand
+		mockGetBrandByIDErrors    error
+		mockSoftDeleteBrandErrors error
+		expectedError             bool
+	}{
+		{
+			name:                      "Success_SoftDeleteBrandSvc",
+			ctx:                       context.Background(),
+			mockGetBrandByIDReturn:    brands.Brand{ID: uuid, Name: "Marca-teste", CreatedAt: time.Now()},
+			mockGetBrandByIDErrors:    nil,
+			mockSoftDeleteBrandErrors: nil,
+			expectedError:             false,
+		},
+		{
+			name:                      "Error_SoftDeleteBrandSvc_GetBrandByID",
+			ctx:                       context.Background(),
+			mockGetBrandByIDReturn:    brands.Brand{},
+			mockGetBrandByIDErrors:    brandsRepo.ErrBrandNotFound,
+			mockSoftDeleteBrandErrors: nil,
+			expectedError:             true,
+		},
+		{
+			name:                      "Error_SoftDeleteBrandRepo",
+			ctx:                       context.Background(),
+			mockGetBrandByIDReturn:    brands.Brand{ID: uuid, Name: "Marca-teste", CreatedAt: time.Now()},
+			mockGetBrandByIDErrors:    nil,
+			mockSoftDeleteBrandErrors: brandsRepo.ErrBrandNotFound,
+			expectedError:             true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockRepo := brands_mocks.NewMockBrandsRepoInterface(ctrl)
+
+			if tt.mockGetBrandByIDErrors != nil {
+				mockRepo.EXPECT().
+					GetBrandByID(tt.ctx, uuid).
+					Return(tt.mockGetBrandByIDReturn, tt.mockGetBrandByIDErrors).
+					Times(1)
+
+			} else if tt.mockSoftDeleteBrandErrors != nil {
+				mockRepo.EXPECT().
+					GetBrandByID(tt.ctx, uuid).
+					Return(tt.mockGetBrandByIDReturn, tt.mockGetBrandByIDErrors)
+				mockRepo.EXPECT().
+					SoftDeleteBrand(tt.ctx, uuid).
+					Return(tt.mockSoftDeleteBrandErrors).
+					Times(1)
+					
+			} else {
+				mockRepo.EXPECT().
+					GetBrandByID(tt.ctx, uuid).
+					Return(tt.mockGetBrandByIDReturn, tt.mockGetBrandByIDErrors)
+				mockRepo.EXPECT().
+					SoftDeleteBrand(tt.ctx, uuid).
+					Return(tt.mockSoftDeleteBrandErrors).
+					Times(1)
+			}
+
+			svc := NewBrandSvc(mockRepo)
+			err := svc.SoftDeleteBrandSvc(tt.ctx, uuid)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else if !tt.expectedError {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
