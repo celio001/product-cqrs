@@ -45,26 +45,28 @@ func TestCreateBrandsSvc(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-		mockRepo := brands_mocks.NewMockBrandsRepoInterface(ctrl)
-		mockRepo.EXPECT().
-			CreateBrand(tt.ctx, tt.brand).
-			Return(tt.mockBrandsReturn, tt.mockError).
-			Times(1)
+			mockRepo := brands_mocks.NewMockBrandsRepoInterface(ctrl)
+			mockRepo.EXPECT().
+				CreateBrand(tt.ctx, tt.brand).
+				Return(tt.mockBrandsReturn, tt.mockError).
+				Times(1)
 
-		svc := NewBrandSvc(mockRepo)
-		brand, err := svc.CreateBrandSvc(tt.ctx, tt.brand)
+			svc := NewBrandSvc(mockRepo)
+			brand, err := svc.CreateBrandSvc(tt.ctx, tt.brand)
 
-		if tt.expectedError {
-			assert.Error(t, err)
-			assert.Equal(t, brands.Brand{}, brand)
-		} else if !tt.expectedError {
-			assert.NoError(t, err)
-			assert.IsType(t, brand, brands.Brand{})
-			assert.Equal(t, brand.Name, brand.Name)
-		}
+			if tt.expectedError {
+				assert.Error(t, err)
+				assert.Equal(t, brands.Brand{}, brand)
+			} else if !tt.expectedError {
+				assert.NoError(t, err)
+				assert.IsType(t, brand, brands.Brand{})
+				assert.Equal(t, brand.Name, brand.Name)
+			}
+		})
 	}
 }
 
