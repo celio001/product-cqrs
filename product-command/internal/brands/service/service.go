@@ -12,6 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	ErrCreateBrand = errors.New("error create brand")
+)
+
 type brandSvc struct {
 	repo brandsRepo.BrandsRepoInterface
 }
@@ -26,11 +30,25 @@ func NewBrandSvc(repo brandsRepo.BrandsRepoInterface) BrandSvcInterface {
 }
 
 func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (brands.Brand, error) {
+
+	logger.Info("initiating brand creation",
+        zap.String("brand.name", brand.Name),
+        zap.String("event.action", "create_brand_start"),
+    )
+
 	bCreated, err := b.repo.CreateBrand(ctx, brand)
 	if err != nil {
-		logger.Error("error create brand", zap.String("error", err.Error()))
+		logger.Error("failed to create brand", 
+            zap.String("error.message", err.Error()),
+            zap.String("error.code", "ERROR_CREATE_BRAND"),
+            zap.String("brand.name", brand.Name), 
+        )
 		return brands.Brand{}, err
 	}
+	logger.Info("brand created successfully",
+		zap.String("brand.name", brand.Name),
+		zap.String("brand.id", bCreated.ID.String()),
+		zap.String("event.action", "create_brand_success"),)
 
 	return bCreated, nil
 }
@@ -43,7 +61,7 @@ func (b *brandSvc) SoftDeleteBrandSvc(ctx context.Context, id uuid.UUID) error {
 			return err
 		} else {
 			logger.Error("error get brand to delete", zap.String("error", err.Error()))
-			return err
+			return ErrCreateBrand
 		}
 	}
 	err = b.repo.SoftDeleteBrand(ctx, brand.ID)
