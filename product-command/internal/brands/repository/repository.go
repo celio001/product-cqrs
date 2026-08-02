@@ -1,4 +1,4 @@
-package repository
+package brands_repository
 
 import (
 	"context"
