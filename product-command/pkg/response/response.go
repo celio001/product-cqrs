@@ -53,14 +53,7 @@ type Response struct {
 	Error   any    `json:"error,omitempty"`
 }
 
-type Builder struct {
-	message string
-	data    any
-	meta    any
-	err     any
-}
-
-func (b *Builder) Send(status any, c fiber.Ctx) fiber.Ctx {
+func (b *Builder) Send(c fiber.Ctx) error {
 	resp := Response{
 		Status:  b.status,
 		Message: b.message,
@@ -68,5 +61,5 @@ func (b *Builder) Send(status any, c fiber.Ctx) fiber.Ctx {
 		Meta:    b.meta,
 		Error:   b.err,
 	}
-	return c.Status(b.status).JSONP(resp)
+	return c.Status(b.status).JSON(resp)
 }
