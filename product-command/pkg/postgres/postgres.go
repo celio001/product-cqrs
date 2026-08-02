@@ -9,10 +9,6 @@ import (
 
 func ConectPostgres(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 
-	// dsn := config.GetString("POSTGRES_DB_DSN")
-	// if dsn == "" {
-	// 	return nil, errors.New("Empty Postgres DSN")
-	// }
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
@@ -26,11 +22,6 @@ func ConectPostgres(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 
 	dbPool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := dbPool.Ping(ctx); err != nil {
-		dbPool.Close()
 		return nil, err
 	}
 
