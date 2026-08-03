@@ -57,20 +57,35 @@ func (b *brandSvc) SoftDeleteBrandSvc(ctx context.Context, id uuid.UUID) error {
 	brand, err := b.repo.GetBrandByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, brandsRepo.ErrBrandNotFound) {
-			logger.Error("error get brand not found", zap.String("error", err.Error()))
+			logger.Error("brand not found to delete",
+				zap.String("error.message", err.Error()),
+				zap.String("error.code", "ERROR_GET_BRAND"),
+			)
 			return err
 		} else {
-			logger.Error("error get brand to delete", zap.String("error", err.Error()))
+			logger.Error("error get brand to delete",
+				zap.String("error.message", err.Error()),
+				zap.String("error.code", "INTERNAL_ERROR_GET_BRAND"),
+				zap.String("brand.id", id.String()),
+			)
 			return ErrCreateBrand
 		}
 	}
 	err = b.repo.SoftDeleteBrand(ctx, brand.ID)
 	if err != nil {
 		if errors.Is(err, brandsRepo.ErrBrandNotFound) {
-			logger.Error("error delete brand not found", zap.String("error", err.Error()))
+			logger.Error("error delete brand not found",
+				zap.String("error.message", err.Error()),
+				zap.String("error.code", "ERROR_UUID_BRAND_NOT_FOUND_TO_DELETE"),
+				zap.String("brand.id", id.String()),
+			)
 			return err
 		} else {
-			logger.Error("error delete brand", zap.String("error", err.Error()))
+			logger.Error("internal error delete brand",
+				zap.String("error.message", err.Error()),
+				zap.String("error.code", "ERROR_INTERNAL_DELETE_BRAND"),
+				zap.String("brand.id", id.String()),
+			)
 			return err
 		}
 	}
