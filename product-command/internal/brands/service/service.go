@@ -48,7 +48,7 @@ func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (bran
 	logger.Info("brand created successfully",
 		zap.String("brand.name", brand.Name),
 		zap.String("brand.id", bCreated.ID.String()),
-		zap.String("event.action", "create_brand_success"),)
+		zap.String("event.action", "create_brand_success"))
 
 	return bCreated, nil
 }
