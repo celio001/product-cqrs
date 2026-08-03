@@ -34,6 +34,10 @@ func (s *brandsHandler) CreateBrandHandler(c fiber.Ctx) error {
 	createBrandRequest := CreateBrandRequest{}
 
 	if err := c.Bind().Body(&createBrandRequest); err != nil {
+		logger.Error("invalid create brand body",
+			zap.String("error.type", "ValidateError"),
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "INVALID_CREATE_BRAND_BODY"))
 		return response.New().
 			Status(http.StatusBadRequest).
 			Message(err.Error()).
