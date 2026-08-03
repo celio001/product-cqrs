@@ -38,11 +38,11 @@ func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (bran
 
 	bCreated, err := b.repo.CreateBrand(ctx, brand)
 	if err != nil {
-		logger.Error("failed to create brand", 
-            zap.String("error.message", err.Error()),
-            zap.String("error.code", "ERROR_CREATE_BRAND"),
-            zap.String("brand.name", brand.Name), 
-        )
+		logger.Error("failed to create brand",
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "ERROR_CREATE_BRAND"),
+			zap.String("brand.name", brand.Name),
+		)
 		return brands.Brand{}, err
 	}
 	logger.Info("brand created successfully",
