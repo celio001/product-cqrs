@@ -1,15 +1,18 @@
 package brands_handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/celio001/product-command/internal/brands"
+	brandsRepo "github.com/celio001/product-command/internal/brands/repository"
 	brandsSvc "github.com/celio001/product-command/internal/brands/service"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/celio001/product-command/pkg/response"
 	validate_errors "github.com/celio001/product-command/pkg/validate"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -66,4 +69,47 @@ func (s *brandsHandler) CreateBrandHandler(c fiber.Ctx) error {
 		Message("brand successfully created").
 		Data(b).
 		Send(c)
+}
+
+func (s *brandsHandler) SoftDeleteBrandHandler(c fiber.Ctx) error {
+
+	uString := c.Params("id")
+
+	uuid, err := uuid.Parse(uString)
+	if err != nil {
+		logger.Error("invalid id brand",
+			zap.String("error.type", "ValidateError"),
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "INVALID_UUID_SOFT_DELETE_BRAND"))
+
+		return response.New().
+			Status(http.StatusBadRequest).
+			Message("invalid id brand").
+			Error("INVALID_UUID_SOFT_DELETE_BRAND").
+			Send(c)
+	}
+
+	err = s.brandSvc.SoftDeleteBrandSvc(c, uuid)
+	if err != nil{
+		switch  {
+		case errors.Is(err, brandsRepo.ErrBrandNotFound):
+			return response.New().
+				Status(http.StatusBadRequest).
+				Message("brand id not found").
+				Error("ERROR_BRAND_NOT_FOUND").
+				Send(c)
+		default:
+			return response.New().
+				Status(http.StatusInternalServerError).
+				Message("error delete brand").
+				Error("ERROR_DELETE_BRAND").
+				Send(c) 
+		} 
+	}
+
+	return response.New().
+				Status(http.StatusOK).
+				Message("brand successfully deleted").
+				Send(c) 
+
 }
