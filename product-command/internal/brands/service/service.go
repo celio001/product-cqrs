@@ -31,11 +31,6 @@ func NewBrandSvc(repo brandsRepo.BrandsRepoInterface) BrandSvcInterface {
 
 func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (brands.Brand, error) {
 
-	logger.Info("initiating brand creation",
-        zap.String("brand.name", brand.Name),
-        zap.String("event.action", "create_brand_start"),
-    )
-
 	bCreated, err := b.repo.CreateBrand(ctx, brand)
 	if err != nil {
 		logger.Error("failed to create brand",
