@@ -22,6 +22,7 @@ type brandsHandler struct {
 
 type BrandsHandlerInterface interface {
 	CreateBrandHandler(c fiber.Ctx) error
+	SoftDeleteBrandHandler(c fiber.Ctx) error
 }
 
 func NewBrandHandler(brandSvc brandsSvc.BrandSvcInterface) BrandsHandlerInterface {
