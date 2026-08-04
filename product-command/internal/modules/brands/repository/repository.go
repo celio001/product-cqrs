@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/celio001/product-command/internal/brands"
+	"github.com/celio001/product-command/internal/modules/brands"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

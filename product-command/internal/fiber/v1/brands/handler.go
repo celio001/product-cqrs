@@ -4,9 +4,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/celio001/product-command/internal/brands"
-	brandsRepo "github.com/celio001/product-command/internal/brands/repository"
-	brandsSvc "github.com/celio001/product-command/internal/brands/service"
+	"github.com/celio001/product-command/internal/modules/brands"
+	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
+	brandsSvc "github.com/celio001/product-command/internal/modules/brands/service"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/celio001/product-command/pkg/response"
 	validate_errors "github.com/celio001/product-command/pkg/validate"

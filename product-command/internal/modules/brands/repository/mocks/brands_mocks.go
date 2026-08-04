@@ -4,7 +4,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	brands "github.com/celio001/product-command/internal/brands"
+	brands "github.com/celio001/product-command/internal/modules/brands"
 	uuid "github.com/google/uuid"
 	gomock "go.uber.org/mock/gomock"
 )

@@ -1,7 +1,7 @@
 package fiber
 
 import (
-	brandsSvc "github.com/celio001/product-command/internal/brands/service"
+	brandsSvc "github.com/celio001/product-command/internal/modules/brands/service"
 	"github.com/gofiber/fiber/v3"
 )
 

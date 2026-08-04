@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/celio001/product-command/internal/brands"
-	brandsRepo "github.com/celio001/product-command/internal/brands/repository"
-	brands_mocks "github.com/celio001/product-command/internal/brands/repository/mocks"
+	"github.com/celio001/product-command/internal/modules/brands"
+	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
+	brands_mocks "github.com/celio001/product-command/internal/modules/brands/repository/mocks"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"

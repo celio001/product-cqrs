@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/celio001/product-command/internal/brands"
-	brandsRepo "github.com/celio001/product-command/internal/brands/repository"
+	"github.com/celio001/product-command/internal/modules/brands"
+	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
 	"github.com/celio001/product-command/pkg/logger"
 	"go.uber.org/zap"
 )
