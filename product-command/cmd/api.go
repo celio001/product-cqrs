@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"github.com/celio001/product-command/config"
-	brands_repository "github.com/celio001/product-command/internal/brands/repository"
-	brands_service "github.com/celio001/product-command/internal/brands/service"
+	brands_repository "github.com/celio001/product-command/internal/modules/brands/repository"
+	brands_service "github.com/celio001/product-command/internal/modules/brands/service"
 	"github.com/celio001/product-command/internal/fiber"
+	categories_repository "github.com/celio001/product-command/internal/modules/categories/repository"
+	categories_service "github.com/celio001/product-command/internal/modules/categories/service"
 	"github.com/celio001/product-command/pkg/lifecycle"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/celio001/product-command/pkg/postgres"
@@ -38,7 +40,10 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 	brandsRepo := brands_repository.NewBrandsRepository(pg)
 	brandsSvc := brands_service.NewBrandSvc(brandsRepo)
 
-	f := fiber.CreateApp(brandsSvc)
+	categoriesRepo := categories_repository.NewCategoriesRepo(pg)
+	categoriesSvc := categories_service.NewCategoriesSvc(categoriesRepo)
+
+	f := fiber.CreateApp(brandsSvc, categoriesSvc)
 
 	lifecycle.New(cmd.Context(), "api", f.Start, f.Stop)
 
