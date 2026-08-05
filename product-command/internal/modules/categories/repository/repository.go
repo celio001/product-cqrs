@@ -18,14 +18,15 @@ type categoriesRepo struct {
 }
 
 type CategoriesInterface interface {
-	CreateCategorie(ctx context.Context, categorie categories.Categories)(categories.Categories, error)
+	CreateCategory(ctx context.Context, categorie categories.Categories) (categories.Categories, error)
+	SoftDeleteCategory(ctx context.Context, id uuid.UUID) error
 }
 
-func NewCategoriesRepo(PgPool *pgxpool.Pool) CategoriesInterface{
+func NewCategoriesRepo(PgPool *pgxpool.Pool) CategoriesInterface {
 	return &categoriesRepo{PgPool: PgPool}
 }
 
-func (c *categoriesRepo) CreateCategorie(ctx context.Context, categorie categories.Categories)(categories.Categories, error){
+func (c *categoriesRepo) CreateCategory(ctx context.Context, categorie categories.Categories) (categories.Categories, error) {
 	err := c.PgPool.QueryRow(ctx, "INSERT INTO categories(name) VALUES($1) RETURNING id, parent_id", categorie.Name).Scan(&categorie.ID, &categorie.ParentID)
 	if err != nil {
 		return categories.Categories{}, err
