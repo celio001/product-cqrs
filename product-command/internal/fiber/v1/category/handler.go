@@ -56,7 +56,7 @@ func (ch categoriesHandler) CreateCategoriesHandler(c fiber.Ctx) error {
 			Send(c)
 	}
 
-	category, err := ch.categoriesSvc.CreateCategorieSvc(c, categories.Categories{Name: categorie.Name})
+	category, err := ch.categoriesSvc.CreateCategorySvc(c, categories.Categories{Name: categorie.Name})
 	if err != nil {
 		return response.New().
 			Status(http.StatusInternalServerError).

@@ -14,16 +14,16 @@ type categoriesSvc struct {
 }
 
 type CategoriesSvcInterface interface {
-	CreateCategorieSvc(ctx context.Context, categorie categories.Categories) (categories.Categories, error)
+	CreateCategorySvc(ctx context.Context, categorie categories.Categories) (categories.Categories, error)
 }
 
 func NewCategoriesSvc(categoriesRepo categoriesRepo.CategoriesInterface) CategoriesSvcInterface {
 	return &categoriesSvc{categoriesRepo: categoriesRepo}
 }
 
-func (c *categoriesSvc) CreateCategorieSvc(ctx context.Context, categorie categories.Categories) (categories.Categories, error) {
+func (c *categoriesSvc) CreateCategorySvc(ctx context.Context, categorie categories.Categories) (categories.Categories, error) {
 
-	category, err := c.categoriesRepo.CreateCategorie(ctx, categorie)
+	category, err := c.categoriesRepo.CreateCategory(ctx, categorie)
 	if err != nil {
 		logger.Error("failed to create category",
 			zap.String("error.message", err.Error()),
