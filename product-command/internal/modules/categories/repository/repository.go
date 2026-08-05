@@ -2,9 +2,15 @@ package categories_repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/celio001/product-command/internal/modules/categories"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+var (
+	ErrCategoryNotFound = errors.New("category not found")
 )
 
 type categoriesRepo struct {
@@ -26,4 +32,17 @@ func (c *categoriesRepo) CreateCategorie(ctx context.Context, categorie categori
 	}
 
 	return categorie, nil
+}
+
+func (c *categoriesRepo) SoftDeleteCategory(ctx context.Context, id uuid.UUID) error {
+	query := "UPDATE categories SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL"
+	result, err := c.PgPool.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrCategoryNotFound
+	}
+	return nil
 }
