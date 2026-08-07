@@ -27,7 +27,8 @@ func NewCategoriesRepo(PgPool *pgxpool.Pool) CategoriesInterface {
 }
 
 func (c *categoriesRepo) CreateCategory(ctx context.Context, categorie categories.Categories) (categories.Categories, error) {
-	err := c.PgPool.QueryRow(ctx, "INSERT INTO categories(name) VALUES($1) RETURNING id, parent_id", categorie.Name).Scan(&categorie.ID, &categorie.ParentID)
+	query := "INSERT INTO categories(name) VALUES($1) RETURNING id, parent_id"
+	err := c.PgPool.QueryRow(ctx, query, categorie.Name).Scan(&categorie.ID, &categorie.ParentID)
 	if err != nil {
 		return categories.Categories{}, err
 	}
