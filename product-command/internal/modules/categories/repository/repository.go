@@ -6,6 +6,7 @@ import (
 
 	"github.com/celio001/product-command/internal/modules/categories"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,12 +19,30 @@ type categoriesRepo struct {
 }
 
 type CategoriesInterface interface {
+	GetCategoryByID(ctx context.Context, id uuid.UUID) (categories.Categories, error)
 	CreateCategory(ctx context.Context, categorie categories.Categories) (categories.Categories, error)
 	SoftDeleteCategory(ctx context.Context, id uuid.UUID) error
 }
 
 func NewCategoriesRepo(PgPool *pgxpool.Pool) CategoriesInterface {
 	return &categoriesRepo{PgPool: PgPool}
+}
+
+func (c *categoriesRepo) GetCategoryByID(ctx context.Context, id uuid.UUID) (categories.Categories, error) {
+
+	var category categories.Categories
+
+	query := "SELECT id, name FROM categories WHERE id = $1 AND deleted_at IS NULL"
+	err := c.PgPool.QueryRow(ctx, query, id).Scan(&category.ID, &category.Name)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return categories.Categories{}, ErrCategoryNotFound
+		} else {
+			return categories.Categories{}, err
+		}
+	}
+
+	return category, nil
 }
 
 func (c *categoriesRepo) CreateCategory(ctx context.Context, categorie categories.Categories) (categories.Categories, error) {
