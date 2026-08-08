@@ -13,4 +13,5 @@ func RegisterRouter(router fiber.Router, CategoriesSvc categories_service.Catego
 	
 	handler := NewCategoriesHandler(CategoriesSvc)
 	router.Post("/", handler.CreateCategoriesHandler)
+	router.Delete("/:id", handler.SoftDeleteCategoriesHandler)
 }

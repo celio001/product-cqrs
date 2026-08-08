@@ -1,15 +1,18 @@
 package category_handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/celio001/product-command/internal/modules/categories"
+	categories_repository "github.com/celio001/product-command/internal/modules/categories/repository"
 	categories_service "github.com/celio001/product-command/internal/modules/categories/service"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/celio001/product-command/pkg/response"
 	validate_errors "github.com/celio001/product-command/pkg/validate"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -19,13 +22,14 @@ type categoriesHandler struct {
 
 type CategoriesHandlerInterface interface {
 	CreateCategoriesHandler(c fiber.Ctx) error
+	SoftDeleteCategoriesHandler(c fiber.Ctx) error
 }
 
 func NewCategoriesHandler(categoriesSvc categories_service.CategoriesSvcInterface) CategoriesHandlerInterface {
 	return &categoriesHandler{categoriesSvc: categoriesSvc}
 }
 
-func (ch categoriesHandler) CreateCategoriesHandler(c fiber.Ctx) error {
+func (h categoriesHandler) CreateCategoriesHandler(c fiber.Ctx) error {
 
 	var categorie CreateCategoriesRequest
 
@@ -56,7 +60,7 @@ func (ch categoriesHandler) CreateCategoriesHandler(c fiber.Ctx) error {
 			Send(c)
 	}
 
-	category, err := ch.categoriesSvc.CreateCategorySvc(c, categories.Categories{Name: categorie.Name})
+	category, err := h.categoriesSvc.CreateCategorySvc(c, categories.Categories{Name: categorie.Name})
 	if err != nil {
 		return response.New().
 			Status(http.StatusInternalServerError).
@@ -64,12 +68,53 @@ func (ch categoriesHandler) CreateCategoriesHandler(c fiber.Ctx) error {
 			Send(c)
 	}
 	categoryReso := CreateCategoryResponse{
-		ID: category.ID.String(),
+		ID:       category.ID.String(),
 		ParentID: category.ParentID.String(),
-		Name: category.Name,
+		Name:     category.Name,
 	}
 	return response.New().
-			Status(http.StatusOK).
-			Data(categoryReso).
+		Status(http.StatusOK).
+		Data(categoryReso).
+		Send(c)
+}
+
+func (h *categoriesHandler) SoftDeleteCategoriesHandler(c fiber.Ctx) error {
+	uString := c.Params("id")
+
+	uuid, err := uuid.Parse(uString)
+	if err != nil {
+		logger.Error("invalid id category",
+			zap.String("error.type", "ValidateError"),
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "INVALID_UUID_SOFT_DELETE_CATEGORY"))
+
+		return response.New().
+			Status(http.StatusBadRequest).
+			Message("invalid id brand").
+			Error("INVALID_UUID_SOFT_DELETE_BRAND").
 			Send(c)
+	}
+
+	err = h.categoriesSvc.SoftDeleteCategory(c, uuid)
+	if err != nil {
+		switch {
+		case errors.Is(err, categories_repository.ErrCategoryNotFound):
+			return response.New().
+				Status(http.StatusBadRequest).
+				Message("category id not found").
+				Error("ERROR_CATEGORY_NOT_FOUND").
+				Send(c)
+		default:
+			return response.New().
+				Status(http.StatusInternalServerError).
+				Message("error delete category").
+				Error("ERROR_DELETE_CATEGORY").
+				Send(c)
+		}
+	}
+
+	return response.New().
+		Status(http.StatusOK).
+		Message("category successfully deleted").
+		Send(c)
 }

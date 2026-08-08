@@ -6,6 +6,7 @@ import (
 	"github.com/celio001/product-command/internal/modules/categories"
 	categoriesRepo "github.com/celio001/product-command/internal/modules/categories/repository"
 	"github.com/celio001/product-command/pkg/logger"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -15,6 +16,7 @@ type categoriesSvc struct {
 
 type CategoriesSvcInterface interface {
 	CreateCategorySvc(ctx context.Context, categorie categories.Categories) (categories.Categories, error)
+	SoftDeleteCategory(ctx context.Context, uuid uuid.UUID) error
 }
 
 func NewCategoriesSvc(categoriesRepo categoriesRepo.CategoriesInterface) CategoriesSvcInterface {
@@ -38,4 +40,12 @@ func (c *categoriesSvc) CreateCategorySvc(ctx context.Context, categorie categor
 		zap.String("event.action", "CATEGORY_CREATED_SUCCESS"))
 
 	return category, nil
+}
+
+func (c *categoriesSvc) SoftDeleteCategory(ctx context.Context, uuid uuid.UUID) error{
+	err := c.categoriesRepo.SoftDeleteCategory(ctx, uuid)
+	if err != nil{
+		return err
+	}
+	return nil
 }
