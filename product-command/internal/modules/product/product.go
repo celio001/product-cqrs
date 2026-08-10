@@ -19,12 +19,12 @@ type Product struct {
 	CostPrice           float64
 	SalePrice           float64
 	PromotionalPrice    float64
-	GrossWeifht         float64
+	GrossWeight         float64
 	NetWeight           float64
 	Height              float64
 	Width               float64
 	Length              float32
 	Status              string
 	CreatedAt           time.Time
-	UpdateAt            time.Time
+	UpdatedAt            time.Time
 }
