@@ -23,7 +23,7 @@ func (h HttpServer) Start(ctx context.Context) error {
 	}))
 
 	v1Router := api.Group(v1.HandlerPath)
-	v1.RegisterRouter(v1Router, h.brandsSvc, h.categoriesSvc)
+	v1.RegisterRouter(v1Router, h.brandsSvc, h.categoriesSvc, h.productSvc)
 
 	addr := fmt.Sprint(":", config.GetString("HTTP_PORT"))
 	
