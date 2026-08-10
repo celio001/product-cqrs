@@ -2,11 +2,16 @@ package cmd
 
 import (
 	"github.com/celio001/product-command/config"
+	"github.com/celio001/product-command/internal/database"
+	"github.com/celio001/product-command/internal/fiber"
 	brands_repository "github.com/celio001/product-command/internal/modules/brands/repository"
 	brands_service "github.com/celio001/product-command/internal/modules/brands/service"
-	"github.com/celio001/product-command/internal/fiber"
 	categories_repository "github.com/celio001/product-command/internal/modules/categories/repository"
 	categories_service "github.com/celio001/product-command/internal/modules/categories/service"
+	fiscal_repository "github.com/celio001/product-command/internal/modules/fiscal/repository"
+	inventory_repository "github.com/celio001/product-command/internal/modules/inventory/repository"
+	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
+	product_service "github.com/celio001/product-command/internal/modules/product/service"
 	"github.com/celio001/product-command/pkg/lifecycle"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/celio001/product-command/pkg/postgres"
@@ -37,13 +42,21 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 		logger.Fatal("error ping postrgres database")
 	}
 
+	tx := database.New(pg)
+
 	brandsRepo := brands_repository.NewBrandsRepository(pg)
 	brandsSvc := brands_service.NewBrandSvc(brandsRepo)
 
 	categoriesRepo := categories_repository.NewCategoriesRepo(pg)
 	categoriesSvc := categories_service.NewCategoriesSvc(categoriesRepo)
 
-	f := fiber.CreateApp(brandsSvc, categoriesSvc)
+	inventoryRepo := inventory_repository.NewInventoryRepo(pg, tx)
+	fiscalRepo := fiscal_repository.NewFiscalRepo(pg, tx)
+	productRepo := product_repository.NewProductRepo(pg, tx)
+
+	productSvc := product_service.NewProductSvc(productRepo, fiscalRepo, inventoryRepo, categoriesRepo, brandsRepo)
+
+	f := fiber.CreateApp(brandsSvc, categoriesSvc, productSvc)
 
 	lifecycle.New(cmd.Context(), "api", f.Start, f.Stop)
 
