@@ -2,6 +2,7 @@ package product_service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	product_dto "github.com/celio001/product-command/internal/fiber/v1/product/dto"
@@ -13,6 +14,9 @@ import (
 	inventory_repository "github.com/celio001/product-command/internal/modules/inventory/repository"
 	"github.com/celio001/product-command/internal/modules/product"
 	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
+	"github.com/celio001/product-command/pkg/logger"
+	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type productSvc struct {
@@ -25,6 +29,7 @@ type productSvc struct {
 
 type ProductSvcInterface interface {
 	CreateProductSvc(ctx context.Context, p product.Product, i inventory.Inventory, f fiscal.FiscalData) (resp product_dto.CreateProductResponse, err error)
+	SoftDeleteProductSvc(ctx context.Context, id uuid.UUID) error
 }
 
 func NewProductSvc(productRepo product_repository.ProductRepoInterface, fiscalRepo fiscal_repository.FiscalRepositoryInterface, InventoryRep inventory_repository.InventoryRepoInterface, CategoriesRepo categories_repository.CategoriesInterface, BrandRepo brands_repository.BrandsRepoInterface) ProductSvcInterface {
@@ -89,6 +94,22 @@ func (s *productSvc) CreateProductSvc(ctx context.Context, p product.Product, i 
 	resp = s.productResponse(product, inventory, fiscal)
 
 	return resp, nil
+}
+
+func (s *productSvc) SoftDeleteProductSvc(ctx context.Context, id uuid.UUID) error {
+	err := s.productRepo.SoftDeleteProduct(ctx, id)
+	if err != nil {
+		if errors.Is(err, product_repository.ErrProductNotFound) {
+			logger.Error("error delete product not found",
+				zap.String("error.message", err.Error()),
+				zap.String("error.code", "ERROR_UUID_PRODUCT_NOT_FOUND_TO_DELETE"),
+				zap.String("product.id", id.String()),
+			)
+		}
+		return err
+	}
+
+	return nil
 }
 
 func (s *productSvc) productResponse(p product.Product, i inventory.Inventory, f fiscal.FiscalData) product_dto.CreateProductResponse {
