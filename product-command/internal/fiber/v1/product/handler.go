@@ -1,12 +1,16 @@
 package product_handler
 
 import (
+	"errors"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	product_dto "github.com/celio001/product-command/internal/fiber/v1/product/dto"
 	"github.com/celio001/product-command/internal/modules/fiscal"
 	"github.com/celio001/product-command/internal/modules/inventory"
 	"github.com/celio001/product-command/internal/modules/product"
+	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
 	product_service "github.com/celio001/product-command/internal/modules/product/service"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/celio001/product-command/pkg/response"
@@ -22,6 +26,7 @@ type productHandler struct {
 
 type ProductHandlerInterface interface {
 	CreateProductHandler(c fiber.Ctx) error
+	SoftDeleteProductHandler(c fiber.Ctx) error
 }
 
 func NewProductHandler(productSvc product_service.ProductSvcInterface) ProductHandlerInterface {
@@ -84,6 +89,47 @@ func (h *productHandler) CreateProductHandler(c fiber.Ctx) error {
 		Status(http.StatusCreated).
 		Message("Product created successfully").
 		Data(resp).
+		Send(c)
+}
+
+func (h *productHandler) SoftDeleteProductHandler(c fiber.Ctx) error {
+	uString := c.Params("id")
+
+	uuid, err := uuid.Parse(uString)
+	if err != nil {
+		logger.Error("invalid id product",
+			zap.String("error.type", "ValidateError"),
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "INVALID_UUID_SOFT_DELETE_PRODUCT"))
+
+		return response.New().
+			Status(http.StatusBadRequest).
+			Message("invalid id product").
+			Error("INVALID_UUID_SOFT_DELETE_PRODUCT").
+			Send(c)
+	}
+
+	err = h.productSvc.SoftDeleteProductSvc(c, uuid)
+	if err != nil {
+		switch {
+		case errors.Is(err, product_repository.ErrProductNotFound):
+			return response.New().
+				Status(http.StatusBadRequest).
+				Message("product id not found").
+				Error("ERROR_PRODUCT_NOT_FOUND").
+				Send(c)
+		default:
+			return response.New().
+				Status(http.StatusInternalServerError).
+				Message("error delete product").
+				Error("ERROR_DELETE_PRODUCT").
+				Send(c)
+		}
+	}
+
+	return response.New().
+		Status(http.StatusOK).
+		Message("product successfully deleted").
 		Send(c)
 }
 

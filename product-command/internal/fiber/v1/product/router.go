@@ -13,4 +13,5 @@ func RegisterRouter(router fiber.Router, productSvc product_service.ProductSvcIn
 	
 	handler := NewProductHandler(productSvc)
 	router.Post("/", handler.CreateProductHandler)
+	router.Delete("/:id", handler.SoftDeleteProductHandler)
 }
