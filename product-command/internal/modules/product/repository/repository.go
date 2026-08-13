@@ -2,11 +2,17 @@ package product_repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/celio001/product-command/internal/database"
 	"github.com/celio001/product-command/internal/modules/product"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+var (
+	ErrProductNotFound = errors.New(`product not found for delete`)
 )
 
 type productRepo struct {
@@ -16,6 +22,7 @@ type productRepo struct {
 
 type ProductRepoInterface interface {
 	CreateProductRepo(ctx context.Context, p product.Product) (product.Product, error)
+	SoftDeleteProduct(ctx context.Context, id uuid.UUID) error
 
 	//init transaction
 	WithTx(tx pgx.Tx) ProductRepoInterface
@@ -50,4 +57,19 @@ func (r *productRepo) CreateProductRepo(ctx context.Context, p product.Product) 
 		return product.Product{}, err
 	}
 	return p, nil
+}
+
+func (r *productRepo) SoftDeleteProduct(ctx context.Context, id uuid.UUID) error {
+	query := `UPDATE products SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL`
+	
+	result, err := r.Tx.DB.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrProductNotFound
+	}
+	
+	return nil
 }
