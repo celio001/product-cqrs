@@ -12,6 +12,7 @@ import (
 	fiscal_repository "github.com/celio001/product-command/internal/modules/fiscal/repository"
 	"github.com/celio001/product-command/internal/modules/inventory"
 	inventory_repository "github.com/celio001/product-command/internal/modules/inventory/repository"
+	"github.com/celio001/product-command/internal/modules/producer"
 	"github.com/celio001/product-command/internal/modules/product"
 	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
 	"github.com/celio001/product-command/pkg/logger"
@@ -25,6 +26,7 @@ type productSvc struct {
 	InventoryRep   inventory_repository.InventoryRepoInterface
 	CategoriesRepo categories_repository.CategoriesInterface
 	BrandRepo      brands_repository.BrandsRepoInterface
+	KPublish       producer.ProducerCommandInterface
 }
 
 type ProductSvcInterface interface {
@@ -32,13 +34,14 @@ type ProductSvcInterface interface {
 	SoftDeleteProductSvc(ctx context.Context, id uuid.UUID) error
 }
 
-func NewProductSvc(productRepo product_repository.ProductRepoInterface, fiscalRepo fiscal_repository.FiscalRepositoryInterface, InventoryRep inventory_repository.InventoryRepoInterface, CategoriesRepo categories_repository.CategoriesInterface, BrandRepo brands_repository.BrandsRepoInterface) ProductSvcInterface {
+func NewProductSvc(productRepo product_repository.ProductRepoInterface, fiscalRepo fiscal_repository.FiscalRepositoryInterface, InventoryRep inventory_repository.InventoryRepoInterface, CategoriesRepo categories_repository.CategoriesInterface, BrandRepo brands_repository.BrandsRepoInterface, KPublish producer.ProducerCommandInterface) ProductSvcInterface {
 	return &productSvc{
 		fiscalRepo:     fiscalRepo,
 		productRepo:    productRepo,
 		InventoryRep:   InventoryRep,
 		CategoriesRepo: CategoriesRepo,
 		BrandRepo:      BrandRepo,
+		KPublish:       KPublish,
 	}
 }
 
@@ -92,6 +95,11 @@ func (s *productSvc) CreateProductSvc(ctx context.Context, p product.Product, i 
 	}
 
 	resp = s.productResponse(product, inventory, fiscal)
+
+	err = s.KPublish.PublishProductCreated(ctx, resp)
+	if err != nil {
+		return product_dto.CreateProductResponse{}, err
+	}
 
 	return resp, nil
 }

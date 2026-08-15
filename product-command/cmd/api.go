@@ -10,8 +10,10 @@ import (
 	categories_service "github.com/celio001/product-command/internal/modules/categories/service"
 	fiscal_repository "github.com/celio001/product-command/internal/modules/fiscal/repository"
 	inventory_repository "github.com/celio001/product-command/internal/modules/inventory/repository"
+	"github.com/celio001/product-command/internal/modules/producer"
 	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
 	product_service "github.com/celio001/product-command/internal/modules/product/service"
+	"github.com/celio001/product-command/pkg/kafka"
 	"github.com/celio001/product-command/pkg/lifecycle"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/celio001/product-command/pkg/postgres"
@@ -44,6 +46,8 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 
 	tx := database.New(pg)
 
+	k := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_TOPIC"))
+
 	brandsRepo := brands_repository.NewBrandsRepository(pg)
 	brandsSvc := brands_service.NewBrandSvc(brandsRepo)
 
@@ -54,7 +58,9 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 	fiscalRepo := fiscal_repository.NewFiscalRepo(pg, tx)
 	productRepo := product_repository.NewProductRepo(pg, tx)
 
-	productSvc := product_service.NewProductSvc(productRepo, fiscalRepo, inventoryRepo, categoriesRepo, brandsRepo)
+	producer := producer.NewProducerCommand(k)
+
+	productSvc := product_service.NewProductSvc(productRepo, fiscalRepo, inventoryRepo, categoriesRepo, brandsRepo, producer)
 
 	f := fiber.CreateApp(brandsSvc, categoriesSvc, productSvc)
 
