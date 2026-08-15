@@ -1,0 +1,69 @@
+networks:
+  kafka-net:
+    driver: bridge
+
+services:
+  kafka1:
+    image: confluentinc/cp-kafka:7.8.0
+    hostname: kafka1
+    container_name: kafka1
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_BROKER_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka1:9093'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka1:9092,CONTROLLER://kafka1:9093,EXTERNAL://0.0.0.0:29092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka1:9092,EXTERNAL://127.0.0.1:29092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      CLUSTER_ID: 'EmptNWtoR4GGWx-BH6nGLQ'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+    volumes:
+      - ./kafka1/data:/var/lib/kafka/data
+    networks:
+      - kafka-net
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka1:9092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-topics:
+    image: confluentinc/cp-kafka:7.8.0 
+    depends_on:  
+      kafka1:
+        condition: service_healthy
+    networks:
+      - kafka-net 
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "create kafka topics"
+        kafka-topics --bootstrap-server kafka1:9092 --create --if-not-exists \
+          --topic product.created \
+          --partitions 3 \
+          --config retention.ms=604800000
+                
+        echo "Topics created"
+        kafka-topics --bootstrap-server kafka1:9092 --list 
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-cluster-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:9092
+    depends_on:
+      - kafka1
+    networks:
+      - kafka-net
