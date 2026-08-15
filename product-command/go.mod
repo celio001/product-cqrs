@@ -31,8 +31,10 @@ require (
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
+	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
+	github.com/segmentio/kafka-go v0.4.51 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect

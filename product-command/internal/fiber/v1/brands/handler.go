@@ -116,5 +116,4 @@ func (s *brandsHandler) SoftDeleteBrandHandler(c fiber.Ctx) error {
 				Status(http.StatusOK).
 				Message("brand successfully deleted").
 				Send(c) 
-
 }

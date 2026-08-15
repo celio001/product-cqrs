@@ -24,6 +24,8 @@ profile.cov
 go.work
 go.work.sum
 
+kafka1
+
 # env file
 .env
 
