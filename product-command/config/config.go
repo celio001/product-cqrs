@@ -10,8 +10,9 @@ var config = map[string]string{
 
 	//Postgres
 	//Kafka
-	"KAFKA_BROKERS": "localhost:29092",
-	"KAFKA_TOPIC":   "product.created",
+	"KAFKA_BROKERS":       "localhost:29092",
+	"KAFKA_PRODUCT_TOPIC": "product.created",
+	"KAFKA_BRAND_TOPIC":   "brand.created",
 }
 
 func GetString(k string) string {
