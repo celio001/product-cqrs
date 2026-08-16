@@ -6,17 +6,88 @@ import (
 	"testing"
 	"time"
 
+	product_dto "github.com/celio001/product-command/internal/fiber/v1/product/dto"
 	"github.com/celio001/product-command/internal/modules/brands"
 	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
-	brands_mocks "github.com/celio001/product-command/internal/modules/brands/repository/mocks"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 )
+
+type fakeProducer struct{}
+
+func (f *fakeProducer) PublishProductCreated(ctx context.Context, p product_dto.CreateProductResponse) error {
+	return nil
+}
+
+func (f *fakeProducer) PublishBrandCreated(ctx context.Context, b brands.Brand) error {
+	return nil
+}
+
+type noopTx struct{ pgx.Tx }
+
+func (n noopTx) Begin(context.Context) (pgx.Tx, error) { return n, nil }
+func (n noopTx) Commit(context.Context) error          { return nil }
+func (n noopTx) Rollback(context.Context) error        { return nil }
+func (n noopTx) CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error) {
+	return 0, nil
+}
+func (n noopTx) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults { return nil }
+func (n noopTx) LargeObjects() pgx.LargeObjects                         { return pgx.LargeObjects{} }
+func (n noopTx) Prepare(context.Context, string, string) (*pgconn.StatementDescription, error) {
+	return nil, nil
+}
+func (n noopTx) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, nil
+}
+func (n noopTx) Query(context.Context, string, ...any) (pgx.Rows, error) { return nil, nil }
+func (n noopTx) QueryRow(context.Context, string, ...any) pgx.Row        { return nil }
+func (n noopTx) Conn() *pgx.Conn                                         { return nil }
+
+type fakeBrandRepo struct {
+	createBrandFn     func(context.Context, brands.Brand) (brands.Brand, error)
+	getBrandByIDFn    func(context.Context, uuid.UUID) (brands.Brand, error)
+	softDeleteBrandFn func(context.Context, uuid.UUID) error
+	beginTxCalled     bool
+}
+
+func (f *fakeBrandRepo) BeginTx(ctx context.Context) (pgx.Tx, error) {
+	f.beginTxCalled = true
+	return noopTx{}, nil
+}
+
+func (f *fakeBrandRepo) WithTx(tx pgx.Tx) brandsRepo.BrandsRepoInterface {
+	return f
+}
+
+func (f *fakeBrandRepo) GetBrandByID(ctx context.Context, id uuid.UUID) (brands.Brand, error) {
+	if f.getBrandByIDFn != nil {
+		return f.getBrandByIDFn(ctx, id)
+	}
+	return brands.Brand{}, nil
+}
+
+func (f *fakeBrandRepo) CreateBrand(ctx context.Context, b brands.Brand) (brands.Brand, error) {
+	if f.createBrandFn != nil {
+		return f.createBrandFn(ctx, b)
+	}
+	return b, nil
+}
+
+func (f *fakeBrandRepo) SoftDeleteBrand(ctx context.Context, id uuid.UUID) error {
+	if f.softDeleteBrandFn != nil {
+		return f.softDeleteBrandFn(ctx, id)
+	}
+	return nil
+}
 
 func TestCreateBrandsSvc(t *testing.T) {
 	logger.Init("product-command", "1.0.0", "development")
+
+	producer := &fakeProducer{}
+
 	tests := []struct {
 		name             string
 		brand            brands.Brand
@@ -34,7 +105,8 @@ func TestCreateBrandsSvc(t *testing.T) {
 			mockError:        nil,
 			expected:         brands.Brand{ID: uuid.New(), Name: "Marca-teste", CreatedAt: time.Now()},
 			expectedError:    false,
-		}, {
+		},
+		{
 			name:             "Error",
 			brand:            brands.Brand{Name: "Marca-teste"},
 			ctx:              context.Background(),
@@ -44,35 +116,38 @@ func TestCreateBrandsSvc(t *testing.T) {
 			expectedError:    true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+			repo := &fakeBrandRepo{
+				createBrandFn: func(ctx context.Context, b brands.Brand) (brands.Brand, error) {
+					return tt.mockBrandsReturn, tt.mockError
+				},
+			}
 
-			mockRepo := brands_mocks.NewMockBrandsRepoInterface(ctrl)
-			mockRepo.EXPECT().
-				CreateBrand(tt.ctx, tt.brand).
-				Return(tt.mockBrandsReturn, tt.mockError).
-				Times(1)
-
-			svc := NewBrandSvc(mockRepo)
+			svc := NewBrandSvc(repo, producer)
 			brand, err := svc.CreateBrandSvc(tt.ctx, tt.brand)
 
 			if tt.expectedError {
 				assert.Error(t, err)
 				assert.Equal(t, brands.Brand{}, brand)
-			} else if !tt.expectedError {
-				assert.NoError(t, err)
-				assert.IsType(t, brand, brands.Brand{})
-				assert.Equal(t, brand.Name, brand.Name)
+				return
 			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.mockBrandsReturn.ID, brand.ID)
+			assert.Equal(t, tt.mockBrandsReturn.Name, brand.Name)
+			assert.Equal(t, tt.mockBrandsReturn.CreatedAt, brand.CreatedAt)
 		})
 	}
 }
 
 func TestSoftDeleteBrandSvc(t *testing.T) {
 	logger.Init("product-command", "1.0.0", "development")
-	uuid := uuid.New()
+
+	producer := &fakeProducer{}
+	uuidValue := uuid.New()
+
 	tests := []struct {
 		name                      string
 		ctx                       context.Context
@@ -84,7 +159,7 @@ func TestSoftDeleteBrandSvc(t *testing.T) {
 		{
 			name:                      "Success_SoftDeleteBrandSvc",
 			ctx:                       context.Background(),
-			mockGetBrandByIDReturn:    brands.Brand{ID: uuid, Name: "Marca-teste", CreatedAt: time.Now()},
+			mockGetBrandByIDReturn:    brands.Brand{ID: uuidValue, Name: "Marca-teste", CreatedAt: time.Now()},
 			mockGetBrandByIDErrors:    nil,
 			mockSoftDeleteBrandErrors: nil,
 			expectedError:             false,
@@ -100,52 +175,33 @@ func TestSoftDeleteBrandSvc(t *testing.T) {
 		{
 			name:                      "Error_SoftDeleteBrandRepo",
 			ctx:                       context.Background(),
-			mockGetBrandByIDReturn:    brands.Brand{ID: uuid, Name: "Marca-teste", CreatedAt: time.Now()},
+			mockGetBrandByIDReturn:    brands.Brand{ID: uuidValue, Name: "Marca-teste", CreatedAt: time.Now()},
 			mockGetBrandByIDErrors:    nil,
 			mockSoftDeleteBrandErrors: brandsRepo.ErrBrandNotFound,
 			expectedError:             true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockRepo := brands_mocks.NewMockBrandsRepoInterface(ctrl)
-
-			if tt.mockGetBrandByIDErrors != nil {
-				mockRepo.EXPECT().
-					GetBrandByID(tt.ctx, uuid).
-					Return(tt.mockGetBrandByIDReturn, tt.mockGetBrandByIDErrors).
-					Times(1)
-
-			} else if tt.mockSoftDeleteBrandErrors != nil {
-				mockRepo.EXPECT().
-					GetBrandByID(tt.ctx, uuid).
-					Return(tt.mockGetBrandByIDReturn, tt.mockGetBrandByIDErrors)
-				mockRepo.EXPECT().
-					SoftDeleteBrand(tt.ctx, uuid).
-					Return(tt.mockSoftDeleteBrandErrors).
-					Times(1)
-					
-			} else {
-				mockRepo.EXPECT().
-					GetBrandByID(tt.ctx, uuid).
-					Return(tt.mockGetBrandByIDReturn, tt.mockGetBrandByIDErrors)
-				mockRepo.EXPECT().
-					SoftDeleteBrand(tt.ctx, uuid).
-					Return(tt.mockSoftDeleteBrandErrors).
-					Times(1)
+			repo := &fakeBrandRepo{
+				getBrandByIDFn: func(ctx context.Context, id uuid.UUID) (brands.Brand, error) {
+					return tt.mockGetBrandByIDReturn, tt.mockGetBrandByIDErrors
+				},
+				softDeleteBrandFn: func(ctx context.Context, id uuid.UUID) error {
+					return tt.mockSoftDeleteBrandErrors
+				},
 			}
 
-			svc := NewBrandSvc(mockRepo)
-			err := svc.SoftDeleteBrandSvc(tt.ctx, uuid)
+			svc := NewBrandSvc(repo, producer)
+			err := svc.SoftDeleteBrandSvc(tt.ctx, uuidValue)
 
 			if tt.expectedError {
 				assert.Error(t, err)
-			} else if !tt.expectedError {
-				assert.NoError(t, err)
+				return
 			}
+
+			assert.NoError(t, err)
 		})
 	}
 }
