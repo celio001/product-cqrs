@@ -55,7 +55,7 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 	brandsSvc := brands_service.NewBrandSvc(brandsRepo, producer)
 
 	categoriesRepo := categories_repository.NewCategoriesRepo(pg)
-	categoriesSvc := categories_service.NewCategoriesSvc(categoriesRepo)
+	categoriesSvc := categories_service.NewCategoriesSvc(categoriesRepo, producer)
 
 	inventoryRepo := inventory_repository.NewInventoryRepo(pg, tx)
 	fiscalRepo := fiscal_repository.NewFiscalRepo(pg, tx)
