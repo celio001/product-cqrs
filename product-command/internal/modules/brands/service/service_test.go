@@ -9,6 +9,7 @@ import (
 	product_dto "github.com/celio001/product-command/internal/fiber/v1/product/dto"
 	"github.com/celio001/product-command/internal/modules/brands"
 	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
+	"github.com/celio001/product-command/internal/modules/categories"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -23,6 +24,10 @@ func (f *fakeProducer) PublishProductCreated(ctx context.Context, p product_dto.
 }
 
 func (f *fakeProducer) PublishBrandCreated(ctx context.Context, b brands.Brand) error {
+	return nil
+}
+
+func (f *fakeProducer) PublishCategoryCreated(ctx context.Context, c categories.Categories) error {
 	return nil
 }
 
