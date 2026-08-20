@@ -51,6 +51,16 @@ services:
           --topic product.created \
           --partitions 3 \
           --config retention.ms=604800000
+
+        kafka-topics --bootstrap-server kafka1:9092 --create --if-not-exists \
+          --topic brand.created \
+          --partitions 3 \
+          --config retention.ms=604800000
+        
+        kafka-topics --bootstrap-server kafka1:9092 --create --if-not-exists \
+          --topic category.created \
+          --partitions 3 \
+          --config retention.ms=604800000
                 
         echo "Topics created"
         kafka-topics --bootstrap-server kafka1:9092 --list 
