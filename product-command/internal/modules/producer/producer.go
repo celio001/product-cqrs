@@ -18,6 +18,7 @@ import (
 type producerCommand struct {
 	ProductTopic *kafka.Writer
 	BrandTopic   *kafka.Writer
+	Category     *kafka.Writer
 }
 
 type ProducerCommandInterface interface {
@@ -26,10 +27,11 @@ type ProducerCommandInterface interface {
 	PublishCategoryCreated(ctx context.Context, c categories.Categories) error
 }
 
-func NewProducerCommand(ProductTopic *kafka.Writer, BrandTopic *kafka.Writer) ProducerCommandInterface {
+func NewProducerCommand(ProductTopic *kafka.Writer, BrandTopic *kafka.Writer, Category *kafka.Writer) ProducerCommandInterface {
 	return &producerCommand{
 		ProductTopic: ProductTopic,
 		BrandTopic:   BrandTopic,
+		Category:     Category,
 	}
 }
 
@@ -99,7 +101,7 @@ func (k *producerCommand) PublishCategoryCreated(ctx context.Context, c categori
 		{Key: "trace_id", Value: []byte(uuid.New().String())},
 	}
 
-	err = k.BrandTopic.WriteMessages(ctx, kafka.Message{
+	err = k.Category.WriteMessages(ctx, kafka.Message{
 		Value:   valueBytes,
 		Headers: kafkaHeaders,
 		Time:    time.Now(),

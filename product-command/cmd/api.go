@@ -48,8 +48,9 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 
 	productTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_PRODUCT_TOPIC"))
 	brandTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_BRAND_TOPIC"))
+	categoryTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_CATEGORY_TOPIC"))
 
-	producer := producer.NewProducerCommand(productTopic, brandTopic)
+	producer := producer.NewProducerCommand(productTopic, brandTopic, categoryTopic)
 
 	brandsRepo := brands_repository.NewBrandsRepository(pg, tx)
 	brandsSvc := brands_service.NewBrandSvc(brandsRepo, producer)
