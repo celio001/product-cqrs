@@ -26,6 +26,8 @@ go.work.sum
 
 kafka1
 
+.DS_Store
+
 # env file
 .env
 
