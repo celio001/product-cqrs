@@ -13,6 +13,7 @@ import (
 
 func (h HttpServer) Start(ctx context.Context) error {
 
+	h.app.Use(middleware.OpenTelemetryMiddleware())
 	h.app.Use(middleware.LoggerMiddleware())
 	api := h.app.Group("/api")
 
@@ -26,7 +27,7 @@ func (h HttpServer) Start(ctx context.Context) error {
 	v1.RegisterRouter(v1Router, h.brandsSvc, h.categoriesSvc, h.productSvc)
 
 	addr := fmt.Sprint(":", config.GetString("HTTP_PORT"))
-	
+
 	return h.app.Listen(addr, f.ListenConfig{
 		DisableStartupMessage: true,
 	})
