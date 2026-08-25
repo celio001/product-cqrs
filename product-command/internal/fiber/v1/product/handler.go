@@ -65,7 +65,7 @@ func (h *productHandler) CreateProductHandler(c fiber.Ctx) error {
 	p := requestToProduct(request)
 	i := requestToInventory(request)
 	f := responseToFiscal(request)
-	resp, err := h.productSvc.CreateProductSvc(c, p, i, f)
+	resp, err := h.productSvc.CreateProductSvc(c.Context(), p, i, f)
 
 	if err != nil {
 		logger.Error("failed to create product",
