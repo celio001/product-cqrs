@@ -14,6 +14,7 @@ type Configs struct {
 	Env            string
 	KafkaCfg       KafkaConfig
 	MongoDB        MongoDB
+	JaegerConfig   JaegerConfig
 }
 
 type KafkaConfig struct {
@@ -25,6 +26,10 @@ type KafkaConfig struct {
 
 type MongoDB struct {
 	DSN string
+}
+
+type JaegerConfig struct {
+	URL string
 }
 
 func LoadEnvs() *Configs {
@@ -46,6 +51,9 @@ func LoadEnvs() *Configs {
 		},
 		MongoDB: MongoDB{
 			DSN: os.Getenv("MONGO_DB_DSN"),
+		},
+		JaegerConfig: JaegerConfig{
+			URL: os.Getenv("JAEGER_URL"),
 		},
 	}
 }
