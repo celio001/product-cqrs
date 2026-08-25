@@ -6,6 +6,32 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+type KafkaHeaderCarrier []kafka.Header
+
+func (c *KafkaHeaderCarrier) Get(key string) string {
+	for _, h := range *c {
+		if h.Key == key {
+			return string(h.Value)
+		}
+	}
+	return ""
+}
+
+func (c *KafkaHeaderCarrier) Set(key string, value string) {
+	*c = append(*c, kafka.Header{
+		Key:   key,
+		Value: []byte(value),
+	})
+}
+
+func (c *KafkaHeaderCarrier) Keys() []string {
+	keys := make([]string, len(*c))
+	for i, h := range *c {
+		keys[i] = h.Key
+	}
+	return keys
+}
+
 type consumerTopics struct {
 	ProductTopic *kafka.Reader
 }
@@ -27,6 +53,7 @@ func (k *consumerTopics) ConsumerProductTopic(ctx context.Context) (kafka.Messag
 	if err != nil {
 		return kafka.Message{}, err
 	}
+
 	return kmessage, nil
 }
 

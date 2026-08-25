@@ -13,6 +13,9 @@ import (
 	product_respository "github.com/celio001/product-cqrs/worker/internal/modules/product/respository"
 	"github.com/celio001/product-cqrs/worker/pkg/logger"
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -20,22 +23,24 @@ type productService struct {
 	productRepo   product_respository.ProductRepositoryInterface
 	consumerTopic consumer.ConsumerTopicsInterface
 	productDlq    producer.ProducerDlqInterface
+	tracer        trace.Tracer
 }
 
 type ProductServiceInterface interface {
 	CreateProductSvc(ctx context.Context)
 }
 
-func NewProductService(productRepo product_respository.ProductRepositoryInterface, consumerTopic consumer.ConsumerTopicsInterface, productDlq producer.ProducerDlqInterface) ProductServiceInterface {
+func NewProductService(productRepo product_respository.ProductRepositoryInterface, consumerTopic consumer.ConsumerTopicsInterface, productDlq producer.ProducerDlqInterface, tracer trace.Tracer) ProductServiceInterface {
 	return &productService{
 		productRepo:   productRepo,
 		consumerTopic: consumerTopic,
 		productDlq:    productDlq,
+		tracer:        tracer,
 	}
 }
 
 func (s *productService) CreateProductSvc(ctx context.Context) {
-	
+
 	for {
 
 		p, err := s.consumerTopic.ConsumerProductTopic(ctx)
@@ -51,32 +56,45 @@ func (s *productService) CreateProductSvc(ctx context.Context) {
 			continue
 		}
 
-		err = s.createProductWithRetry(ctx, p, 3)
-		if err != nil {
-			err = s.productDlq.PublishProductDlq(ctx, p, err)
-			if err != nil {
-				logger.Error("error publish message to DLQ",
-					zap.String("error", err.Error()),
-					zap.String("event.action", "ERROR_PUBLISH_MESSAGE_DLQ"))
-					continue
-			}
-			err = s.consumerTopic.CommitProductTopic(ctx, p)
-			if err != nil {
-			logger.Error("error commit message",
-				zap.String("error", err.Error()),
-				zap.String("event.action", "ERROR_COMMIT_MESSAGE"))
-			}
-			continue
+		s.processProductMessage(ctx, p)
+	}
+}
+
+func (s *productService) processProductMessage(ctx context.Context, p kafka.Message) {
+	carrier := (*consumer.KafkaHeaderCarrier)(&p.Headers)
+	parentCtx := otel.GetTextMapPropagator().Extract(ctx, carrier)
+
+	messageCtx, span := s.tracer.Start(parentCtx, "kafka.consume.product-registered", trace.WithSpanKind(trace.SpanKindConsumer))
+	defer span.End()
+
+	err := s.createProductWithRetry(messageCtx, p, 3)
+	if err != nil {
+		span.SetStatus(codes.Error, "product creation failed")
+		span.RecordError(err)
+
+		if dlqErr := s.productDlq.PublishProductDlq(messageCtx, p, err); dlqErr != nil {
+			logger.Error("error publish message to DLQ",
+				zap.String("error", dlqErr.Error()),
+				zap.String("event.action", "ERROR_PUBLISH_MESSAGE_DLQ"))
+			return
 		}
 
-		err = s.consumerTopic.CommitProductTopic(ctx, p)
+		err = s.consumerTopic.CommitProductTopic(messageCtx, p)
 		if err != nil {
 			logger.Error("error commit message",
 				zap.String("error", err.Error()),
 				zap.String("event.action", "ERROR_COMMIT_MESSAGE"))
 		}
-		
+		return
 	}
+
+	err = s.consumerTopic.CommitProductTopic(messageCtx, p)
+	if err != nil {
+		logger.Error("error commit message",
+			zap.String("error", err.Error()),
+			zap.String("event.action", "ERROR_COMMIT_MESSAGE"))
+	}
+
 }
 
 func (s *productService) createProductWithRetry(ctx context.Context, p kafka.Message, retries int) error {
@@ -103,12 +121,10 @@ func (s *productService) createProductWithRetry(ctx context.Context, p kafka.Mes
 		}
 
 		logger.Error("error create product",
-				zap.String("error", err.Error()),
-				zap.String("event.action", "ERROR_CREATE_PRODUCT"))
-
+			zap.String("error", err.Error()),
+			zap.String("event.action", "ERROR_CREATE_PRODUCT"))
 
 		time.Sleep(time.Duration(i) * 500 * time.Millisecond)
 	}
 	return err
 }
-
