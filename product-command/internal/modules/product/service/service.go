@@ -17,6 +17,8 @@ import (
 	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -27,6 +29,7 @@ type productSvc struct {
 	CategoriesRepo categories_repository.CategoriesInterface
 	BrandRepo      brands_repository.BrandsRepoInterface
 	KPublish       producer.ProducerCommandInterface
+	tracer         trace.Tracer
 }
 
 type ProductSvcInterface interface {
@@ -34,7 +37,7 @@ type ProductSvcInterface interface {
 	SoftDeleteProductSvc(ctx context.Context, id uuid.UUID) error
 }
 
-func NewProductSvc(productRepo product_repository.ProductRepoInterface, fiscalRepo fiscal_repository.FiscalRepositoryInterface, InventoryRep inventory_repository.InventoryRepoInterface, CategoriesRepo categories_repository.CategoriesInterface, BrandRepo brands_repository.BrandsRepoInterface, KPublish producer.ProducerCommandInterface) ProductSvcInterface {
+func NewProductSvc(productRepo product_repository.ProductRepoInterface, fiscalRepo fiscal_repository.FiscalRepositoryInterface, InventoryRep inventory_repository.InventoryRepoInterface, CategoriesRepo categories_repository.CategoriesInterface, BrandRepo brands_repository.BrandsRepoInterface, KPublish producer.ProducerCommandInterface, tracer trace.Tracer) ProductSvcInterface {
 	return &productSvc{
 		fiscalRepo:     fiscalRepo,
 		productRepo:    productRepo,
@@ -42,35 +45,51 @@ func NewProductSvc(productRepo product_repository.ProductRepoInterface, fiscalRe
 		CategoriesRepo: CategoriesRepo,
 		BrandRepo:      BrandRepo,
 		KPublish:       KPublish,
+		tracer:         tracer,
 	}
 }
 
 func (s *productSvc) CreateProductSvc(ctx context.Context, p product.Product, i inventory.Inventory, f fiscal.FiscalData) (resp product_dto.CreateProductResponse, err error) {
 
+	ctx, span := s.tracer.Start(ctx, "product.create")
+	defer span.End()
+
 	c, err := s.CategoriesRepo.GetCategoryByID(ctx, p.CategoryID)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to retrieve category")
+		span.RecordError(err)
 		return product_dto.CreateProductResponse{}, err
 	}
 	p.CategoryID = c.ID
 
 	b, err := s.BrandRepo.GetBrandByID(ctx, p.BrandID)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to retrieve brand")
+		span.RecordError(err)
 		return product_dto.CreateProductResponse{}, err
 	}
 	p.BrandID = b.ID
 
 	tx, err := s.productRepo.BeginTx(ctx)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to begin transaction")
+		span.RecordError(err)
 		return product_dto.CreateProductResponse{}, err
 	}
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				span.SetStatus(codes.Error, "failed to rollback transaction")
+				span.RecordError(fmt.Errorf("%w: rollback error: %v", err, rbErr))
 				err = fmt.Errorf("%w: rollback error: %v", err, rbErr)
 			}
 			return
 		}
 		err = tx.Commit(ctx)
+		if err != nil {
+			span.SetStatus(codes.Error, "failed to commit transaction")
+			span.RecordError(err)
+		}
 	}()
 
 	productRepoTx := s.productRepo.WithTx(tx)
@@ -79,25 +98,32 @@ func (s *productSvc) CreateProductSvc(ctx context.Context, p product.Product, i 
 
 	product, err := productRepoTx.CreateProductRepo(ctx, p)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to create product")
+		span.RecordError(err)
 		return product_dto.CreateProductResponse{}, err
 	}
 
 	i.ProductID = product.ID
 	inventory, err := inventoryRepoTx.CreateInventoryRepo(ctx, i)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to create inventory")
+		span.RecordError(err)
 		return product_dto.CreateProductResponse{}, err
 	}
 
 	f.ProductId = product.ID
 	fiscal, err := fiscaRepoTx.CreateFiscalData(ctx, f)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to create fiscal data")
+		span.RecordError(err)
 		return product_dto.CreateProductResponse{}, err
 	}
-
 	resp = s.productResponse(product, inventory, fiscal)
 
 	err = s.KPublish.PublishProductCreated(ctx, resp)
 	if err != nil {
+		span.SetStatus(codes.Error, "failed to publish product created event")
+		span.RecordError(err)
 		return product_dto.CreateProductResponse{}, err
 	}
 

@@ -16,8 +16,11 @@ import (
 	"github.com/celio001/product-command/pkg/kafka"
 	"github.com/celio001/product-command/pkg/lifecycle"
 	"github.com/celio001/product-command/pkg/logger"
+	opentelemetry "github.com/celio001/product-command/pkg/openTelemetry"
 	"github.com/celio001/product-command/pkg/postgres"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
+	"go.uber.org/zap"
 )
 
 var (
@@ -32,16 +35,29 @@ func init() {
 }
 
 func httpExecute(cmd *cobra.Command, args []string) error {
+
 	logger.Init(config.GetString("SERVICE_NAME"), config.GetString("SERVICE_VERSION"), config.GetString("ENV"))
+
+	tp, err := opentelemetry.InitTracerProvider(cmd.Context(), config.GetString("SERVICE_NAME"), config.GetString("SERVICE_VERSION"), config.GetString("JAEGER_URL"))
+	if err != nil {
+		logger.Fatal("error initializing tracer provider", zap.String("error", err.Error()))
+	}
+	defer func() {
+		if err := tp.Shutdown(cmd.Context()); err != nil {
+			logger.Fatal("error shutting down tracer provider", zap.String("error", err.Error()))
+		}
+	}()
+
+	tracer := otel.Tracer(config.GetString("SERVICE_NAME"))
 
 	pg, err := postgres.ConectPostgres(cmd.Context(), config.GetString("POSTGRES_DB_DSN"))
 	if err != nil {
-		logger.Fatal("error conection postrgres database")
+		logger.Fatal("error conection postrgres database", zap.String("error", err.Error()))
 	}
 
 	if err := pg.Ping(cmd.Context()); err != nil {
 		pg.Close()
-		logger.Fatal("error ping postrgres database")
+		logger.Fatal("error ping postrgres database", zap.String("error", err.Error()))
 	}
 
 	tx := database.New(pg)
@@ -50,7 +66,7 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 	brandTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_BRAND_TOPIC"))
 	categoryTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_CATEGORY_TOPIC"))
 
-	producer := producer.NewProducerCommand(productTopic, brandTopic, categoryTopic)
+	producer := producer.NewProducerCommand(productTopic, brandTopic, categoryTopic, tracer)
 
 	brandsRepo := brands_repository.NewBrandsRepository(pg, tx)
 	brandsSvc := brands_service.NewBrandSvc(brandsRepo, producer)
@@ -62,9 +78,7 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 	fiscalRepo := fiscal_repository.NewFiscalRepo(pg, tx)
 	productRepo := product_repository.NewProductRepo(pg, tx)
 
-	
-
-	productSvc := product_service.NewProductSvc(productRepo, fiscalRepo, inventoryRepo, categoriesRepo, brandsRepo, producer)
+	productSvc := product_service.NewProductSvc(productRepo, fiscalRepo, inventoryRepo, categoriesRepo, brandsRepo, producer, tracer)
 
 	f := fiber.CreateApp(brandsSvc, categoriesSvc, productSvc)
 
