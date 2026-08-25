@@ -13,7 +13,9 @@ import (
 	"github.com/celio001/product-cqrs/worker/pkg/lifecycle"
 	"github.com/celio001/product-cqrs/worker/pkg/logger"
 	"github.com/celio001/product-cqrs/worker/pkg/mongodb"
+	opentelemetry "github.com/celio001/product-cqrs/worker/pkg/openTelemetry"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
 
@@ -33,6 +35,18 @@ func worker(cmd *cobra.Command, args []string) error {
 
 	logger.Init(cfgs.ServiceName, cfgs.ServiceVersion, cfgs.Env)
 	defer logger.Sync()
+
+	tp, err := opentelemetry.InitTracerProvider(cmd.Context(), cfgs.ServiceName, cfgs.ServiceVersion, cfgs.JaegerConfig.URL)
+	if err != nil {
+		logger.Fatal("error initializing tracer provider", zap.String("error", err.Error()))
+	}
+	defer func() {
+		if err := tp.Shutdown(cmd.Context()); err != nil {
+			logger.Fatal("error shutting down tracer provider", zap.String("error", err.Error()))
+		}
+	}()
+
+	tracer := otel.Tracer("product-worker")
 
 	mongo, err := mongodb.ConnectMongoDB(cmd.Context(), cfgs.MongoDB.DSN)
 	if err != nil {
@@ -59,7 +73,7 @@ func worker(cmd *cobra.Command, args []string) error {
 	productDlqProducer := producer.NewProducerDlq(productDlqTopic)
 
 	productRepo := product_respository.NewProductRepository(mongo)
-	productSvc := product_service.NewProductService(productRepo, productConsumer, productDlqProducer)
+	productSvc := product_service.NewProductService(productRepo, productConsumer, productDlqProducer, tracer)
 
 	return lifecycle.New(cmd.Context(), cfgs.ServiceName,
 		func(ctx context.Context) error {
