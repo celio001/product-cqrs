@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/celio001/product-cqrs/worker/internal/modules/consumer"
-	"github.com/celio001/product-cqrs/worker/internal/modules/producer-dlq"
+	"github.com/celio001/product-cqrs/worker/internal/modules/dlq"
 	"github.com/celio001/product-cqrs/worker/internal/modules/product"
 	product_respository "github.com/celio001/product-cqrs/worker/internal/modules/product/respository"
 	"github.com/celio001/product-cqrs/worker/pkg/logger"
@@ -22,7 +22,7 @@ import (
 type productService struct {
 	productRepo   product_respository.ProductRepositoryInterface
 	consumerTopic consumer.ConsumerTopicsInterface
-	productDlq    producer.ProducerDlqInterface
+	productDlq    dlq.ProducerDlqInterface
 	tracer        trace.Tracer
 }
 
@@ -30,7 +30,7 @@ type ProductServiceInterface interface {
 	CreateProductSvc(ctx context.Context)
 }
 
-func NewProductService(productRepo product_respository.ProductRepositoryInterface, consumerTopic consumer.ConsumerTopicsInterface, productDlq producer.ProducerDlqInterface, tracer trace.Tracer) ProductServiceInterface {
+func NewProductService(productRepo product_respository.ProductRepositoryInterface, consumerTopic consumer.ConsumerTopicsInterface, productDlq dlq.ProducerDlqInterface, tracer trace.Tracer) ProductServiceInterface {
 	return &productService{
 		productRepo:   productRepo,
 		consumerTopic: consumerTopic,
