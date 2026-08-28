@@ -1,8 +1,23 @@
 networks:
   kafka-net:
     driver: bridge
+  mongo-compose-network:
+    driver: bridge
 
 services:
+
+  mongo:
+      image: mongo
+      environment:
+        MONGO_INITDB_ROOT_USERNAME: root
+        MONGO_INITDB_ROOT_PASSWORD: MongoDB2019!
+      ports:
+        - "27017:27017"
+      volumes:
+        - ./mongo/data:/var/lib/mongo/data
+      networks:
+        - mongo-compose-network
+
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: jaeger
@@ -12,6 +27,7 @@ services:
       - "4318:4318"  
     environment:
       - COLLECTOR_OTLP_ENABLED=true
+
   kafka1:
     image: confluentinc/cp-kafka:7.8.0
     hostname: kafka1
