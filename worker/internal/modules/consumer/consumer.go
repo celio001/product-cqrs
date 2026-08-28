@@ -33,17 +33,24 @@ func (c *KafkaHeaderCarrier) Keys() []string {
 }
 
 type consumerTopics struct {
-	ProductTopic *kafka.Reader
+	ProductTopic  *kafka.Reader
+	BrandTopic    *kafka.Reader
+	CategoryTopic *kafka.Reader
 }
 
 type ConsumerTopicsInterface interface {
+	//Product
 	ConsumerProductTopic(ctx context.Context) (kafka.Message, error)
 	CommitProductTopic(ctx context.Context, message kafka.Message) error
+	//Brand
+	ConsumerBrandTopic(ctx context.Context) (kafka.Message, error)
+	CommitBrandTopic(ctx context.Context, message kafka.Message) error
 }
 
-func NewConsumerTopics(ProductTopic *kafka.Reader) ConsumerTopicsInterface {
+func NewConsumerTopics(ProductTopic *kafka.Reader, BrandTopic *kafka.Reader) ConsumerTopicsInterface {
 	return &consumerTopics{
 		ProductTopic: ProductTopic,
+		BrandTopic:   BrandTopic,
 	}
 }
 
@@ -59,6 +66,24 @@ func (k *consumerTopics) ConsumerProductTopic(ctx context.Context) (kafka.Messag
 
 func (k *consumerTopics) CommitProductTopic(ctx context.Context, message kafka.Message) error {
 	err := k.ProductTopic.CommitMessages(ctx, message)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *consumerTopics) ConsumerBrandTopic(ctx context.Context) (kafka.Message, error) {
+
+	kmessage, err := k.BrandTopic.FetchMessage(ctx)
+	if err != nil {
+		return kafka.Message{}, err
+	}
+
+	return kmessage, nil
+}
+
+func (k *consumerTopics) CommitBrandTopic(ctx context.Context, message kafka.Message) error {
+	err := k.BrandTopic.CommitMessages(ctx, message)
 	if err != nil {
 		return err
 	}
