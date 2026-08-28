@@ -5,8 +5,10 @@ import (
 	"errors"
 
 	"github.com/celio001/product-cqrs/worker/config"
+	brand_repository "github.com/celio001/product-cqrs/worker/internal/modules/brand/repository"
+	brand_service "github.com/celio001/product-cqrs/worker/internal/modules/brand/service"
 	"github.com/celio001/product-cqrs/worker/internal/modules/consumer"
-	"github.com/celio001/product-cqrs/worker/internal/modules/producer-dlq"
+	"github.com/celio001/product-cqrs/worker/internal/modules/dlq"
 	product_respository "github.com/celio001/product-cqrs/worker/internal/modules/product/respository"
 	product_service "github.com/celio001/product-cqrs/worker/internal/modules/product/service"
 	"github.com/celio001/product-cqrs/worker/pkg/kafka"
@@ -69,15 +71,26 @@ func worker(cmd *cobra.Command, args []string) error {
 	productDlqTopic := kafka.NewKafkaProducer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProdctDlqTopic)
 	defer productDlqTopic.Close()
 
-	productConsumer := consumer.NewConsumerTopics(productTopic)
-	productDlqProducer := producer.NewProducerDlq(productDlqTopic)
+	brandTopic := kafka.NewKafkaConsumer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.BrandTopic)
+	defer brandTopic.Close()
+
+	brandDlqTopic := kafka.NewKafkaProducer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.BrandDqlTopic)
+	defer brandDlqTopic.Close()
+
+	topicsConsumer := consumer.NewConsumerTopics(productTopic, brandTopic)
+
+	dlqTopics := dlq.NewProducerDlq(productDlqTopic, brandDlqTopic)
 
 	productRepo := product_respository.NewProductRepository(mongo)
-	productSvc := product_service.NewProductService(productRepo, productConsumer, productDlqProducer, tracer)
+	productSvc := product_service.NewProductService(productRepo, topicsConsumer, dlqTopics, tracer)
+
+	brandRepo := brand_repository.NewProductRepository(mongo)
+	brandSvc := brand_service.NewBrandService(brandRepo, topicsConsumer, dlqTopics, tracer)
 
 	return lifecycle.New(cmd.Context(), cfgs.ServiceName,
 		func(ctx context.Context) error {
-			productSvc.CreateProductSvc(ctx)
+			go productSvc.CreateProductSvc(ctx)
+			go brandSvc.CreateBrandSvc(ctx)
 			return nil
 		},
 		func(ctx context.Context) error {
