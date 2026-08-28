@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/celio001/product-command/internal/modules/brands"
 	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
@@ -21,6 +22,7 @@ var (
 type brandSvc struct {
 	repo      brandsRepo.BrandsRepoInterface
 	Kproducer producer.ProducerCommandInterface
+	tracer    trace.Tracer
 }
 
 type BrandSvcInterface interface {
@@ -28,11 +30,18 @@ type BrandSvcInterface interface {
 	SoftDeleteBrandSvc(ctx context.Context, id uuid.UUID) error
 }
 
-func NewBrandSvc(repo brandsRepo.BrandsRepoInterface, Kproducer producer.ProducerCommandInterface) BrandSvcInterface {
-	return &brandSvc{repo: repo, Kproducer: Kproducer}
+func NewBrandSvc(repo brandsRepo.BrandsRepoInterface, Kproducer producer.ProducerCommandInterface, tracer trace.Tracer) BrandSvcInterface {
+	return &brandSvc{
+		repo:      repo,
+		Kproducer: Kproducer,
+		tracer:    tracer,
+	}
 }
 
 func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (brands.Brand, error) {
+
+	ctx, span := b.tracer.Start(ctx, "brand.create")
+	defer span.End()
 
 	tx, err := b.repo.BeginTx(ctx)
 	if err != nil {
@@ -45,7 +54,7 @@ func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (bran
 
 	defer func() {
 		if err != nil {
-			if rbErr := tx.Rollback(ctx); rbErr != nil{
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
 				err = fmt.Errorf("%w: rollback error: %v", err, rbErr)
 			}
 			return
@@ -68,7 +77,7 @@ func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (bran
 		zap.String("brand.name", brand.Name),
 		zap.String("brand.id", bCreated.ID.String()),
 		zap.String("event.action", "create_brand_success"))
-	
+
 	if err = b.Kproducer.PublishBrandCreated(ctx, bCreated); err != nil {
 		return brands.Brand{}, err
 	}

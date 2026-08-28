@@ -69,7 +69,7 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 	producer := producer.NewProducerCommand(productTopic, brandTopic, categoryTopic, tracer)
 
 	brandsRepo := brands_repository.NewBrandsRepository(pg, tx)
-	brandsSvc := brands_service.NewBrandSvc(brandsRepo, producer)
+	brandsSvc := brands_service.NewBrandSvc(brandsRepo, producer, tracer)
 
 	categoriesRepo := categories_repository.NewCategoriesRepo(pg, tx)
 	categoriesSvc := categories_service.NewCategoriesSvc(categoriesRepo, producer)
