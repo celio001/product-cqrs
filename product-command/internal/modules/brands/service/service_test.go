@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/celio001/product-command/config"
 	product_dto "github.com/celio001/product-command/internal/fiber/v1/product/dto"
 	"github.com/celio001/product-command/internal/modules/brands"
 	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
@@ -15,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel"
 )
 
 type fakeProducer struct{}
@@ -92,6 +94,7 @@ func TestCreateBrandsSvc(t *testing.T) {
 	logger.Init("product-command", "1.0.0", "development")
 
 	producer := &fakeProducer{}
+	tracer := otel.Tracer(config.GetString("SERVICE_NAME"))
 
 	tests := []struct {
 		name             string
@@ -130,7 +133,7 @@ func TestCreateBrandsSvc(t *testing.T) {
 				},
 			}
 
-			svc := NewBrandSvc(repo, producer)
+			svc := NewBrandSvc(repo, producer, tracer)
 			brand, err := svc.CreateBrandSvc(tt.ctx, tt.brand)
 
 			if tt.expectedError {
@@ -152,6 +155,7 @@ func TestSoftDeleteBrandSvc(t *testing.T) {
 
 	producer := &fakeProducer{}
 	uuidValue := uuid.New()
+	tracer := otel.Tracer(config.GetString("SERVICE_NAME"))
 
 	tests := []struct {
 		name                      string
@@ -198,7 +202,7 @@ func TestSoftDeleteBrandSvc(t *testing.T) {
 				},
 			}
 
-			svc := NewBrandSvc(repo, producer)
+			svc := NewBrandSvc(repo, producer, tracer)
 			err := svc.SoftDeleteBrandSvc(tt.ctx, uuidValue)
 
 			if tt.expectedError {
