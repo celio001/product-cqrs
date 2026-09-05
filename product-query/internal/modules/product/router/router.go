@@ -10,7 +10,8 @@ const (
 	HandlerPath = "/product"
 )
 
-func RegisterRouter(router chi.Router, productSvc product_service.ProductServiceInterface) {
+func SetupProductRoutes(router chi.Router, productSvc product_service.ProductServiceInterface) {
 	handler := product_handler.NewProductHandler(productSvc)
 	router.Get("/{id}", handler.GetProductByIDHandler)
+
 }

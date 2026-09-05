@@ -8,8 +8,8 @@ import (
 
 	"github.com/celio001/product-cqrs/product-query/config"
 	product_repository "github.com/celio001/product-cqrs/product-query/internal/modules/product/repository"
-	product_router "github.com/celio001/product-cqrs/product-query/internal/modules/product/router"
 	product_service "github.com/celio001/product-cqrs/product-query/internal/modules/product/service"
+	query_router "github.com/celio001/product-cqrs/product-query/internal/router"
 	"github.com/celio001/product-cqrs/product-query/pkg/lifecycle"
 	"github.com/celio001/product-cqrs/product-query/pkg/logger"
 	mongodb "github.com/celio001/product-cqrs/product-query/pkg/mongo"
@@ -52,10 +52,7 @@ func apiExecute(cmd *cobra.Command, args []string) error {
 	productRepo := product_repository.NewProductRepository(mongoClient)
 	productSvc := product_service.NewProductService(productRepo)
 
-	r := chi.NewRouter()
-	r.Route(product_router.HandlerPath, func(r chi.Router) {
-		product_router.RegisterRouter(r, productSvc)
-	})
+	r := query_router.NewSetupRouters(chi.NewRouter(), productSvc)
 
 	srv := &http.Server{
 		Addr:              ":" + cfgs.Port,
