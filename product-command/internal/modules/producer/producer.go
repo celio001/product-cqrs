@@ -59,6 +59,8 @@ type producerCommand struct {
 
 type ProducerCommandInterface interface {
 	PublishProductCreated(ctx context.Context, p product_dto.CreateProductResponse) error
+	PublishProductDeleted(ctx context.Context, id uuid.UUID) error
+
 	PublishBrandCreated(ctx context.Context, b brands.Brand) error
 	PublishCategoryCreated(ctx context.Context, c categories.Categories) error
 }
@@ -106,6 +108,38 @@ func (k *producerCommand) PublishProductCreated(ctx context.Context, p product_d
 		logger.Error("failed to publish the message product created",
 			zap.String("error.message", err.Error()),
 			zap.String("error.code", "ERROR_PUBLISH_CREATE_PRODUCT"),
+		)
+		span.SetStatus(codes.Error, "failed to publish product message")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
+func (k *producerCommand) PublishProductDeleted(ctx context.Context, id uuid.UUID) error {
+	ctx, span := k.tracer.Start(ctx, "kafka.produce.event-submitted")
+	
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("messaging.system", "kafka"),
+		attribute.String("messaging.destination.name", k.ProductTopic.Topic),
+		attribute.String("product.id", id.String()),
+	)
+	
+	kafkaHeaders := []kafka.Header{
+		{Key: "event_type", Value: []byte("product.deleted")},
+	}
+	otel.GetTextMapPropagator().Inject(ctx, kafkaHeaderCarrier{headers: &kafkaHeaders})
+
+	err := k.ProductTopic.WriteMessages(ctx, kafka.Message{
+		Headers: kafkaHeaders,
+		Time:    time.Now(),
+	})
+	if err != nil {
+		logger.Error("failed to publish the message product deleted",
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "ERROR_PUBLISH_DELETE_PRODUCT"),
 		)
 		span.SetStatus(codes.Error, "failed to publish product message")
 		span.RecordError(err)
