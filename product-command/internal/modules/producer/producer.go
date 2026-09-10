@@ -51,10 +51,11 @@ func (c kafkaHeaderCarrier) Keys() []string {
 }
 
 type producerCommand struct {
-	ProductTopic *kafka.Writer
-	BrandTopic   *kafka.Writer
-	Category     *kafka.Writer
-	tracer       trace.Tracer
+	ProductTopic        *kafka.Writer
+	ProductTopicDeleted *kafka.Writer
+	BrandTopic          *kafka.Writer
+	Category            *kafka.Writer
+	tracer              trace.Tracer
 }
 
 type ProducerCommandInterface interface {
@@ -65,12 +66,13 @@ type ProducerCommandInterface interface {
 	PublishCategoryCreated(ctx context.Context, c categories.Categories) error
 }
 
-func NewProducerCommand(ProductTopic *kafka.Writer, BrandTopic *kafka.Writer, Category *kafka.Writer, tracer trace.Tracer) ProducerCommandInterface {
+func NewProducerCommand(ProductTopic *kafka.Writer, ProductTopicDeleted *kafka.Writer, BrandTopic *kafka.Writer, Category *kafka.Writer, tracer trace.Tracer) ProducerCommandInterface {
 	return &producerCommand{
-		ProductTopic: ProductTopic,
-		BrandTopic:   BrandTopic,
-		Category:     Category,
-		tracer:       tracer,
+		ProductTopic:        ProductTopic,
+		ProductTopicDeleted: ProductTopicDeleted,
+		BrandTopic:          BrandTopic,
+		Category:            Category,
+		tracer:              tracer,
 	}
 }
 
@@ -119,20 +121,20 @@ func (k *producerCommand) PublishProductCreated(ctx context.Context, p product_d
 
 func (k *producerCommand) PublishProductDeleted(ctx context.Context, id uuid.UUID) error {
 	ctx, span := k.tracer.Start(ctx, "kafka.produce.event-submitted")
-	
+
 	defer span.End()
 	span.SetAttributes(
 		attribute.String("messaging.system", "kafka"),
 		attribute.String("messaging.destination.name", k.ProductTopic.Topic),
 		attribute.String("product.id", id.String()),
 	)
-	
+
 	kafkaHeaders := []kafka.Header{
 		{Key: "event_type", Value: []byte("product.deleted")},
 	}
 	otel.GetTextMapPropagator().Inject(ctx, kafkaHeaderCarrier{headers: &kafkaHeaders})
 
-	err := k.ProductTopic.WriteMessages(ctx, kafka.Message{
+	err := k.ProductTopicDeleted.WriteMessages(ctx, kafka.Message{
 		Headers: kafkaHeaders,
 		Time:    time.Now(),
 	})
