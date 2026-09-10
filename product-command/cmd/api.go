@@ -63,10 +63,11 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 	tx := database.New(pg)
 
 	productTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_PRODUCT_TOPIC"))
+	productTopicDeleted := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_PRODUCT_DELETED_TOPIC"))
 	brandTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_BRAND_TOPIC"))
 	categoryTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_CATEGORY_TOPIC"))
 
-	producer := producer.NewProducerCommand(productTopic, brandTopic, categoryTopic, tracer)
+	producer := producer.NewProducerCommand(productTopic, productTopicDeleted, brandTopic, categoryTopic, tracer)
 
 	brandsRepo := brands_repository.NewBrandsRepository(pg, tx)
 	brandsSvc := brands_service.NewBrandSvc(brandsRepo, producer, tracer)
