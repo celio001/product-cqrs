@@ -11,6 +11,7 @@ import (
 	"github.com/celio001/product-command/internal/modules/brands"
 	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
 	"github.com/celio001/product-command/internal/modules/categories"
+	"github.com/celio001/product-command/internal/modules/producer"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -93,7 +94,7 @@ func (f *fakeBrandRepo) SoftDeleteBrand(ctx context.Context, id uuid.UUID) error
 func TestCreateBrandsSvc(t *testing.T) {
 	logger.Init("product-command", "1.0.0", "development")
 
-	producer := &fakeProducer{}
+	var producer producer.ProducerCommandInterface
 	tracer := otel.Tracer(config.GetString("SERVICE_NAME"))
 
 	tests := []struct {
@@ -153,7 +154,7 @@ func TestCreateBrandsSvc(t *testing.T) {
 func TestSoftDeleteBrandSvc(t *testing.T) {
 	logger.Init("product-command", "1.0.0", "development")
 
-	producer := &fakeProducer{}
+	var producer producer.ProducerCommandInterface
 	uuidValue := uuid.New()
 	tracer := otel.Tracer(config.GetString("SERVICE_NAME"))
 
