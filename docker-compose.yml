@@ -121,6 +121,12 @@ services:
           --topic product.created \
           --partitions 3 \
           --config retention.ms=604800000
+        
+        echo "create kafka topics"
+        kafka-topics --bootstrap-server kafka1:9092 --create --if-not-exists \
+          --topic product.deleted \
+          --partitions 3 \
+          --config retention.ms=604800000
 
         kafka-topics --bootstrap-server kafka1:9092 --create --if-not-exists \
           --topic brand.created \
