@@ -131,15 +131,51 @@ func (s *productSvc) CreateProductSvc(ctx context.Context, p product.Product, i 
 }
 
 func (s *productSvc) SoftDeleteProductSvc(ctx context.Context, id uuid.UUID) error {
-	err := s.productRepo.SoftDeleteProduct(ctx, id)
+
+	ctx, span := s.tracer.Start(ctx, "product.delete")
+	defer span.End()
+
+	tx, err := s.productRepo.BeginTx(ctx)
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to begin transaction")
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				span.SetStatus(codes.Error, "failed to rollback transaction")
+				span.RecordError(fmt.Errorf("%w: rollback error: %v", err, rbErr))
+				err = fmt.Errorf("%w: rollback error: %v", err, rbErr)
+			}
+			return
+		}
+		err = tx.Commit(ctx)
+		if err != nil {
+			span.SetStatus(codes.Error, "failed to commit transaction")
+			span.RecordError(err)
+		}
+	}()
+	
+	productRepoTx := s.productRepo.WithTx(tx)
+
+	err = productRepoTx.SoftDeleteProduct(ctx, id)
 	if err != nil {
 		if errors.Is(err, product_repository.ErrProductNotFound) {
+			span.SetStatus(codes.Error, "product not found")
 			logger.Error("error delete product not found",
 				zap.String("error.message", err.Error()),
 				zap.String("error.code", "ERROR_UUID_PRODUCT_NOT_FOUND_TO_DELETE"),
 				zap.String("product.id", id.String()),
 			)
 		}
+		return err
+	}
+
+	err = s.KPublish.PublishProductDeleted(ctx, id)
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to publish product deleted event")
+		span.RecordError(err)
 		return err
 	}
 
