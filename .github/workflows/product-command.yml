@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'product-command/**' # Dispara caso tenha mudanças
+      - 'product-command/**' # Dispara caso tenha mudanças nessa pasta
 jobs:
   docker:
     runs-on: ubuntu-latest
