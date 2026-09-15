@@ -16,8 +16,6 @@ RUN apk add --no-cache ca-certificates tzdata && \
 
 WORKDIR /app
 
-COPY --from=builder /api/product-command /app/product-command
-
 USER product-command-user
 
 EXPOSE 8080
