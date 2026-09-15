@@ -1,0 +1,21 @@
+name: CI Check Worker
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'worker/**'
+
+jobs:
+  validate-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Teste de Build da Imagem (Dry Run)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          push: false
