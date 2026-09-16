@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Substitua as portas 8080 pelas portas reais que suas aplicações expõem as métricas (ex: /metrics)
+  - job_name: 'product-command'
+    static_configs:
+      - targets: ['product-command:8081']
+
+  - job_name: 'product-query'
+    static_configs:
+      - targets: ['product-query:8082']
+
+  - job_name: 'worker'
+    static_configs:
+      - targets: ['worker:8080']

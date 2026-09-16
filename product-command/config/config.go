@@ -6,13 +6,24 @@ import (
 )
 
 var config = map[string]string{
-	"ENV": "development",
+	"ENV":       "development",
+	"HTTP_PORT": "8081",
+
+	"SERVICE_NAME":    "product-command",
+	"SERVICE_VERSION": "1.0.0",
 
 	//Postgres
+	"POSTGRES_DB_DSN": "postgres://postgres:postgres@postgres-main:5432/product?sslmode=disable",
+	
 	//Kafka
-	"KAFKA_BROKERS":       "localhost:29092",
-	"KAFKA_PRODUCT_TOPIC": "product.created",
-	"KAFKA_BRAND_TOPIC":   "brand.created",
+	"KAFKA_BROKERS":               "kafka1:9092",
+	"KAFKA_PRODUCT_TOPIC":         "product.created",
+	"KAFKA_PRODUCT_DELETED_TOPIC": "product.deleted",
+	"KAFKA_BRAND_TOPIC":           "brand.created",
+	"KAFKA_CATEGORY_TOPIC":        "category.created",
+
+	//Jaeger
+	"JAEGER_URL": "jaeger:4317",
 }
 
 func GetString(k string) string {

@@ -1,4 +1,4 @@
-FROM golang:1.26.3-alpine AS builder
+FROM golang:1.26.5-alpine AS builder
 
 WORKDIR /api
 
@@ -20,6 +20,6 @@ COPY --from=builder /api/product-query /app/product-query
 
 USER product-query-user
 
-EXPOSE 8080
+EXPOSE 8082
 
 CMD ["./product-query", "api"]
