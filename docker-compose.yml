@@ -1,17 +1,44 @@
-networks:
-  kafka-net:
-    driver: bridge
-  mongo-compose-network:
-    driver: bridge
-  product-command:
-    driver: bridge
-
-volumes:
-  postgres_data_main:
-  postgres_data_dev:
-  mongo_data:
-
 services:
+  product-command:
+    build:
+      context: ./product-command
+      dockerfile: Dockerfile
+    container_name: product-command
+    ports:
+      - "8081:8081"
+    networks:
+      - app-network
+    depends_on:
+      - postgres-main
+      - postgres-dev
+      - kafka1
+      - jaeger
+
+  product-query:
+    build:
+      context: ./product-query
+      dockerfile: Dockerfile
+    container_name: product-query
+    ports:
+      - "8082:8082"
+    networks:
+      - app-network
+    depends_on:
+      - product-command
+      - mongo
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: product-worker
+    networks:
+      - app-network
+    depends_on:
+      - mongo
+      - postgres-main
+      - postgres-dev
+      - jaeger
 
   postgres-main:
     image: postgres:18-alpine
@@ -25,7 +52,7 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - product-command
+      - app-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -44,7 +71,7 @@ services:
     ports:
       - "5433:5432"
     networks:
-      - product-command
+      - app-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -153,3 +180,16 @@ services:
       - kafka1
     networks:
       - kafka-net
+
+networks:
+  kafka-net:
+    driver: bridge
+  mongo-compose-network:
+    driver: bridge
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data_main:
+  postgres_data_dev:
+  mongo_data:
