@@ -1,4 +1,4 @@
-name: CI Check Product Command
+name: CI Check Product Query
 
 on:
   pull_request:
