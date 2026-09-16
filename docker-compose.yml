@@ -9,10 +9,14 @@ services:
     networks:
       - app-network
     depends_on:
-      - postgres-main
-      - postgres-dev
-      - kafka1
-      - jaeger
+      postgres-main:
+        condition: service_healthy
+      postgres-dev:
+        condition: service_healthy
+      kafka1:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
 
   product-query:
     build:
@@ -24,8 +28,14 @@ services:
     networks:
       - app-network
     depends_on:
-      - product-command
-      - mongo
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      jaeger:
+        condition: service_started
+      mongo:
+        condition: service_healthy
 
   worker:
     build:
@@ -34,11 +44,32 @@ services:
     container_name: product-worker
     networks:
       - app-network
+    environment:
+      SERVICE_NAME: worker-sync
+      SERVICE_VERSION: 1.0.0
+      ENV: development
+      KAFKA_BROKERS: kafka1:9092
+      KAFKA_PRODUCT_TOPIC: product.created
+      KAFKA_PRODUCT_DLQ_TOPIC: product.dlq
+      KAFKA_BRAND_TOPIC: brand.created
+      KAFKA_CATEGORY_TOPIC: category.created
+      MONGO_DB_DSN: mongodb://root:MongoDB2019!@mongo:27017/?authSource=admin
+      JAEGER_URL: jaeger:4317
     depends_on:
-      - mongo
-      - postgres-main
-      - postgres-dev
-      - jaeger
+      postgres-main:
+        condition: service_healthy
+      postgres-dev:
+        condition: service_healthy
+      kafka1:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      jaeger:
+        condition: service_started
+      mongo:
+        condition: service_healthy
 
   postgres-main:
     image: postgres:18-alpine
@@ -73,7 +104,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -88,7 +119,13 @@ services:
       volumes:
         - mongo_data:/var/lib/mongo/data
       networks:
-        - mongo-compose-network
+        - app-network
+      healthcheck:
+        test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 15s
 
   jaeger:
     image: jaegertracing/all-in-one:latest
@@ -96,9 +133,58 @@ services:
     ports:
       - "16686:16686" 
       - "4317:4317"   
-      - "4318:4318"  
+      - "4318:4318" 
+    networks:
+      - app-network
     environment:
       - COLLECTOR_OTLP_ENABLED=true
+  
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - app-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+  
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    networks:
+      - app-network
+    command: -config.file=/etc/loki/local-config.yaml
+  
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    networks:
+      - app-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/promtail-config.yaml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+  
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # Senha padrão, o usuário é 'admin'
+    volumes:
+      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
 
   kafka1:
     image: confluentinc/cp-kafka:7.8.0
@@ -126,7 +212,7 @@ services:
     volumes:
       - ./kafka1/data:/var/lib/kafka/data
     networks:
-      - kafka-net
+      - app-network
     healthcheck:
       test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka1:9092", "--list"]
       interval: 10s
@@ -139,7 +225,7 @@ services:
       kafka1:
         condition: service_healthy
     networks:
-      - kafka-net 
+      - app-network
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
@@ -179,13 +265,11 @@ services:
     depends_on:
       - kafka1
     networks:
-      - kafka-net
+      - app-network
+
+
 
 networks:
-  kafka-net:
-    driver: bridge
-  mongo-compose-network:
-    driver: bridge
   app-network:
     driver: bridge
 
