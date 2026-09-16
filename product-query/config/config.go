@@ -30,7 +30,7 @@ func LoadEnvs() *Config {
 		Env:            getEnv("ENV", "development"),
 		Port:           getEnv("PORT", "8082"),
 		MongoDB: MongoDB{
-			DSN: getEnv("MONGO_DB_DSN", "mongodb://localhost:27017"),
+			DSN: getEnv("MONGO_DB_DSN", "mongodb://mongo:27017"),
 		},
 	}
 }
