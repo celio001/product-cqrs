@@ -5,14 +5,17 @@ on:
     branches:
       - main
     paths:
-      - 'product-command/**' # Dispara caso tenha mudanças nessa pasta
+      - 'product-command/**'
+
 jobs:
   docker:
-    needs: build-image-test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
+
+      - name: Validar build da imagem
+        run: docker build -t product-command:test ./product-command
 
       - name: Login no Docker Hub
         uses: docker/login-action@v3
@@ -23,6 +26,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./product-command # Aponta para a pasta do serviço, para tratar somente esse especifico
+          context: ./product-command
+          file: ./product-command/Dockerfile
           push: true
           tags: celiojunior001/product-command:latest

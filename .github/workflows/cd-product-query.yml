@@ -8,11 +8,14 @@ on:
       - 'product-query/**' # Dispara caso tenha mudanças nessa pasta
 jobs:
   docker:
-    needs: build-image-test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
+      
+      - name: Validar build da imagem
+        run: docker build -t product-query:test ./product-query
+
 
       - name: Login no Docker Hub
         uses: docker/login-action@v3
