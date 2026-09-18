@@ -23,6 +23,17 @@ services:
       context: ./product-query
       dockerfile: Dockerfile
     container_name: product-query
+    environment:
+      SERVICE_NAME: product-query
+      SERVICE_VERSION: "1.0.0"
+      ENV: development
+      KAFKA_BROKERS: kafka1:9092
+      KAFKA_PRODUCT_TOPIC: product.created
+      KAFKA_PRODUCT_DLQ_TOPIC: product.dlq
+      KAFKA_BRAND_TOPIC: brand.created
+      KAFKA_CATEGORY_TOPIC: category.created
+      MONGO_DB_DSN: "mongodb://root:MongoDB2019!@mongo:27017/?authSource=admin"
+      JAEGER_URL: jaeger:4317
     ports:
       - "8082:8082"
     networks:
