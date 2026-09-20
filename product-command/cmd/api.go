@@ -4,13 +4,15 @@ import (
 	"github.com/celio001/product-command/config"
 	"github.com/celio001/product-command/internal/database"
 	"github.com/celio001/product-command/internal/fiber"
+	brand_publisher "github.com/celio001/product-command/internal/modules/brands/publisher"
 	brands_repository "github.com/celio001/product-command/internal/modules/brands/repository"
 	brands_service "github.com/celio001/product-command/internal/modules/brands/service"
+	categories_publisher "github.com/celio001/product-command/internal/modules/categories/publisher"
 	categories_repository "github.com/celio001/product-command/internal/modules/categories/repository"
 	categories_service "github.com/celio001/product-command/internal/modules/categories/service"
 	fiscal_repository "github.com/celio001/product-command/internal/modules/fiscal/repository"
 	inventory_repository "github.com/celio001/product-command/internal/modules/inventory/repository"
-	"github.com/celio001/product-command/internal/modules/producer"
+	product_publisher "github.com/celio001/product-command/internal/modules/product/publisher"
 	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
 	product_service "github.com/celio001/product-command/internal/modules/product/service"
 	"github.com/celio001/product-command/pkg/kafka"
@@ -67,19 +69,21 @@ func httpExecute(cmd *cobra.Command, args []string) error {
 	brandTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_BRAND_TOPIC"))
 	categoryTopic := kafka.NewKafkaProducer(config.GetStrings("KAFKA_BROKERS"), config.GetString("KAFKA_CATEGORY_TOPIC"))
 
-	producer := producer.NewProducerCommand(productTopic, productTopicDeleted, brandTopic, categoryTopic, tracer)
+	brandPub := brand_publisher.NewBrandPublisher(brandTopic, tracer)
 
 	brandsRepo := brands_repository.NewBrandsRepository(pg, tx)
-	brandsSvc := brands_service.NewBrandSvc(brandsRepo, producer, tracer)
+	brandsSvc := brands_service.NewBrandSvc(brandsRepo, brandPub, tracer)
 
 	categoriesRepo := categories_repository.NewCategoriesRepo(pg, tx)
-	categoriesSvc := categories_service.NewCategoriesSvc(categoriesRepo, producer)
+	categoriesPub := categories_publisher.NewCategoryPublisher(categoryTopic, tracer)
+	categoriesSvc := categories_service.NewCategoriesSvc(categoriesRepo, categoriesPub)
 
 	inventoryRepo := inventory_repository.NewInventoryRepo(pg, tx)
 	fiscalRepo := fiscal_repository.NewFiscalRepo(pg, tx)
 	productRepo := product_repository.NewProductRepo(pg, tx)
+	productPub := product_publisher.NewProductPublisher(productTopic, productTopicDeleted, tracer)
 
-	productSvc := product_service.NewProductSvc(productRepo, fiscalRepo, inventoryRepo, categoriesRepo, brandsRepo, producer, tracer)
+	productSvc := product_service.NewProductSvc(productRepo, fiscalRepo, inventoryRepo, categoriesRepo, brandsRepo, productPub, tracer)
 
 	f := fiber.CreateApp(brandsSvc, categoriesSvc, productSvc)
 
