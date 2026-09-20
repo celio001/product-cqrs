@@ -12,8 +12,8 @@ import (
 	fiscal_repository "github.com/celio001/product-command/internal/modules/fiscal/repository"
 	"github.com/celio001/product-command/internal/modules/inventory"
 	inventory_repository "github.com/celio001/product-command/internal/modules/inventory/repository"
-	"github.com/celio001/product-command/internal/modules/producer"
 	"github.com/celio001/product-command/internal/modules/product"
+	product_publisher "github.com/celio001/product-command/internal/modules/product/publisher"
 	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
@@ -28,7 +28,7 @@ type productSvc struct {
 	InventoryRep   inventory_repository.InventoryRepoInterface
 	CategoriesRepo categories_repository.CategoriesInterface
 	BrandRepo      brands_repository.BrandsRepoInterface
-	KPublish       producer.ProducerCommandInterface
+	KPublish       product_publisher.ProductPublisherInterface
 	tracer         trace.Tracer
 }
 
@@ -37,7 +37,7 @@ type ProductSvcInterface interface {
 	SoftDeleteProductSvc(ctx context.Context, id uuid.UUID) error
 }
 
-func NewProductSvc(productRepo product_repository.ProductRepoInterface, fiscalRepo fiscal_repository.FiscalRepositoryInterface, InventoryRep inventory_repository.InventoryRepoInterface, CategoriesRepo categories_repository.CategoriesInterface, BrandRepo brands_repository.BrandsRepoInterface, KPublish producer.ProducerCommandInterface, tracer trace.Tracer) ProductSvcInterface {
+func NewProductSvc(productRepo product_repository.ProductRepoInterface, fiscalRepo fiscal_repository.FiscalRepositoryInterface, InventoryRep inventory_repository.InventoryRepoInterface, CategoriesRepo categories_repository.CategoriesInterface, BrandRepo brands_repository.BrandsRepoInterface, KPublish product_publisher.ProductPublisherInterface, tracer trace.Tracer) ProductSvcInterface {
 	return &productSvc{
 		fiscalRepo:     fiscalRepo,
 		productRepo:    productRepo,
@@ -156,7 +156,7 @@ func (s *productSvc) SoftDeleteProductSvc(ctx context.Context, id uuid.UUID) err
 			span.RecordError(err)
 		}
 	}()
-	
+
 	productRepoTx := s.productRepo.WithTx(tx)
 
 	err = productRepoTx.SoftDeleteProduct(ctx, id)
