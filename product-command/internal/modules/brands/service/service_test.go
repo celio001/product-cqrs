@@ -6,33 +6,29 @@ import (
 	"testing"
 	"time"
 
-	"github.com/celio001/product-command/config"
-	product_dto "github.com/celio001/product-command/internal/fiber/v1/product/dto"
 	"github.com/celio001/product-command/internal/modules/brands"
+	brandPublisher "github.com/celio001/product-command/internal/modules/brands/publisher"
 	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
-	"github.com/celio001/product-command/internal/modules/categories"
-	"github.com/celio001/product-command/internal/modules/producer"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
-type fakeProducer struct{}
+type fakeBrandPublisher struct {
+	publishBrandCreatedFn func(context.Context, brands.Brand) error
+}
 
-func (f *fakeProducer) PublishProductCreated(ctx context.Context, p product_dto.CreateProductResponse) error {
+func (f *fakeBrandPublisher) PublishBrandCreated(ctx context.Context, b brands.Brand) error {
+	if f.publishBrandCreatedFn != nil {
+		return f.publishBrandCreatedFn(ctx, b)
+	}
 	return nil
 }
 
-func (f *fakeProducer) PublishBrandCreated(ctx context.Context, b brands.Brand) error {
-	return nil
-}
-
-func (f *fakeProducer) PublishCategoryCreated(ctx context.Context, c categories.Categories) error {
-	return nil
-}
+var _ brandPublisher.BrandPublisherInterface = (*fakeBrandPublisher)(nil)
 
 type noopTx struct{ pgx.Tx }
 
@@ -58,11 +54,13 @@ type fakeBrandRepo struct {
 	createBrandFn     func(context.Context, brands.Brand) (brands.Brand, error)
 	getBrandByIDFn    func(context.Context, uuid.UUID) (brands.Brand, error)
 	softDeleteBrandFn func(context.Context, uuid.UUID) error
-	beginTxCalled     bool
+	beginTxFn         func(context.Context) (pgx.Tx, error)
 }
 
 func (f *fakeBrandRepo) BeginTx(ctx context.Context) (pgx.Tx, error) {
-	f.beginTxCalled = true
+	if f.beginTxFn != nil {
+		return f.beginTxFn(ctx)
+	}
 	return noopTx{}, nil
 }
 
@@ -94,16 +92,12 @@ func (f *fakeBrandRepo) SoftDeleteBrand(ctx context.Context, id uuid.UUID) error
 func TestCreateBrandsSvc(t *testing.T) {
 	logger.Init("product-command", "1.0.0", "development")
 
-	var producer producer.ProducerCommandInterface
-	tracer := otel.Tracer(config.GetString("SERVICE_NAME"))
-
 	tests := []struct {
 		name             string
 		brand            brands.Brand
 		ctx              context.Context
 		mockBrandsReturn brands.Brand
 		mockError        error
-		expected         brands.Brand
 		expectedError    bool
 	}{
 		{
@@ -112,7 +106,6 @@ func TestCreateBrandsSvc(t *testing.T) {
 			ctx:              context.Background(),
 			mockBrandsReturn: brands.Brand{ID: uuid.New(), Name: "Marca-teste", CreatedAt: time.Now()},
 			mockError:        nil,
-			expected:         brands.Brand{ID: uuid.New(), Name: "Marca-teste", CreatedAt: time.Now()},
 			expectedError:    false,
 		},
 		{
@@ -121,7 +114,6 @@ func TestCreateBrandsSvc(t *testing.T) {
 			ctx:              context.Background(),
 			mockBrandsReturn: brands.Brand{},
 			mockError:        errors.New("error create brand"),
-			expected:         brands.Brand{},
 			expectedError:    true,
 		},
 	}
@@ -134,7 +126,8 @@ func TestCreateBrandsSvc(t *testing.T) {
 				},
 			}
 
-			svc := NewBrandSvc(repo, producer, tracer)
+			brandPublisher := &fakeBrandPublisher{}
+			svc := NewBrandSvc(repo, brandPublisher, noop.NewTracerProvider().Tracer("test"))
 			brand, err := svc.CreateBrandSvc(tt.ctx, tt.brand)
 
 			if tt.expectedError {
@@ -154,9 +147,7 @@ func TestCreateBrandsSvc(t *testing.T) {
 func TestSoftDeleteBrandSvc(t *testing.T) {
 	logger.Init("product-command", "1.0.0", "development")
 
-	var producer producer.ProducerCommandInterface
 	uuidValue := uuid.New()
-	tracer := otel.Tracer(config.GetString("SERVICE_NAME"))
 
 	tests := []struct {
 		name                      string
@@ -203,7 +194,7 @@ func TestSoftDeleteBrandSvc(t *testing.T) {
 				},
 			}
 
-			svc := NewBrandSvc(repo, producer, tracer)
+			svc := NewBrandSvc(repo, &fakeBrandPublisher{}, noop.NewTracerProvider().Tracer("test"))
 			err := svc.SoftDeleteBrandSvc(tt.ctx, uuidValue)
 
 			if tt.expectedError {

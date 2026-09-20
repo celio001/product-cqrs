@@ -9,8 +9,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/celio001/product-command/internal/modules/brands"
+	brand_publisher "github.com/celio001/product-command/internal/modules/brands/publisher"
 	brandsRepo "github.com/celio001/product-command/internal/modules/brands/repository"
-	"github.com/celio001/product-command/internal/modules/producer"
 	"github.com/celio001/product-command/pkg/logger"
 	"go.uber.org/zap"
 )
@@ -20,9 +20,9 @@ var (
 )
 
 type brandSvc struct {
-	repo      brandsRepo.BrandsRepoInterface
-	Kproducer producer.ProducerCommandInterface
-	tracer    trace.Tracer
+	repo     brandsRepo.BrandsRepoInterface
+	brandPub brand_publisher.BrandPublisherInterface
+	tracer   trace.Tracer
 }
 
 type BrandSvcInterface interface {
@@ -30,11 +30,11 @@ type BrandSvcInterface interface {
 	SoftDeleteBrandSvc(ctx context.Context, id uuid.UUID) error
 }
 
-func NewBrandSvc(repo brandsRepo.BrandsRepoInterface, Kproducer producer.ProducerCommandInterface, tracer trace.Tracer) BrandSvcInterface {
+func NewBrandSvc(repo brandsRepo.BrandsRepoInterface, brandPub brand_publisher.BrandPublisherInterface, tracer trace.Tracer) BrandSvcInterface {
 	return &brandSvc{
-		repo:      repo,
-		Kproducer: Kproducer,
-		tracer:    tracer,
+		repo:     repo,
+		brandPub: brandPub,
+		tracer:   tracer,
 	}
 }
 
@@ -78,7 +78,7 @@ func (b *brandSvc) CreateBrandSvc(ctx context.Context, brand brands.Brand) (bran
 		zap.String("brand.id", bCreated.ID.String()),
 		zap.String("event.action", "create_brand_success"))
 
-	if err = b.Kproducer.PublishBrandCreated(ctx, bCreated); err != nil {
+	if err = b.brandPub.PublishBrandCreated(ctx, bCreated); err != nil {
 		return brands.Brand{}, err
 	}
 
