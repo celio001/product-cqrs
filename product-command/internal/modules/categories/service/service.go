@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/celio001/product-command/internal/modules/categories"
+	categories_publisher "github.com/celio001/product-command/internal/modules/categories/publisher"
 	categoriesRepo "github.com/celio001/product-command/internal/modules/categories/repository"
-	"github.com/celio001/product-command/internal/modules/producer"
 	"github.com/celio001/product-command/pkg/logger"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -14,7 +14,7 @@ import (
 
 type categoriesSvc struct {
 	categoriesRepo categoriesRepo.CategoriesInterface
-	Kproducer      producer.ProducerCommandInterface
+	Kproducer      categories_publisher.CategoriesPublisherInterface
 }
 
 type CategoriesSvcInterface interface {
@@ -22,7 +22,7 @@ type CategoriesSvcInterface interface {
 	SoftDeleteCategory(ctx context.Context, uuid uuid.UUID) error
 }
 
-func NewCategoriesSvc(categoriesRepo categoriesRepo.CategoriesInterface, Kproducer producer.ProducerCommandInterface) CategoriesSvcInterface {
+func NewCategoriesSvc(categoriesRepo categoriesRepo.CategoriesInterface, Kproducer categories_publisher.CategoriesPublisherInterface) CategoriesSvcInterface {
 	return &categoriesSvc{
 		categoriesRepo: categoriesRepo,
 		Kproducer:      Kproducer,
