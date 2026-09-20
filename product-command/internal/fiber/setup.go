@@ -23,7 +23,7 @@ func CreateApp(brandsSvc brandsSvc.BrandSvcInterface, CategoriesSvc categories_s
 		app:           app,
 		brandsSvc:     brandsSvc,
 		categoriesSvc: CategoriesSvc,
-		productSvc: productSvc,
+		productSvc:    productSvc,
 	}
 
 	return httpServer
