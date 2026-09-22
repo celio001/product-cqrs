@@ -17,8 +17,6 @@ jobs:
       - name: Configurar Go
         uses: actions/setup-go@v5
         with:
-          context: ./product-command
-          push: false
           go-version-file: product-command/go.mod
 
       - name: Instalar dependências
@@ -30,7 +28,7 @@ jobs:
         working-directory: product-command
 
   validate-image:
-    depends-on: run-tests
+    needs: run-tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
