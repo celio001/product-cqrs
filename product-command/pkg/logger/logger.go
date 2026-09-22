@@ -23,7 +23,7 @@ func Init(serviceName, serviceVersion, logEnv string) {
 
 	l, err := cfg.Build()
 	if err != nil {
-		fmt.Fprint(os.Stderr, "failed to initialize logge: %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
 
