@@ -18,13 +18,14 @@ type Configs struct {
 }
 
 type KafkaConfig struct {
-	KafkaBrokers     []string
-	ProductTopic     string
-	ProdctDlqTopic   string
-	BrandTopic       string
-	BrandDqlTopic    string
-	CategoryTopic    string
-	CategoryDlqTopic string
+	KafkaBrokers       []string
+	ProductTopic       string
+	ProductDeleteTopic string
+	ProdctDlqTopic     string
+	BrandTopic         string
+	BrandDqlTopic      string
+	CategoryTopic      string
+	CategoryDlqTopic   string
 }
 
 type MongoDB struct {
@@ -45,13 +46,14 @@ func LoadEnvs() *Configs {
 		ServiceVersion: getEnv("SERVICE_VERSION", "1.0.0"),
 		Env:            getEnv("ENV", "development"),
 		KafkaCfg: KafkaConfig{
-			KafkaBrokers:     kafkaGetStrings("KAFKA_BROKERS"),
-			ProductTopic:     getEnv("KAFKA_PRODUCT_TOPIC", "product.created"),
-			ProdctDlqTopic:   getEnv("KAFKA_PRODUCT_DLQ_TOPIC", "product.dlq"),
-			BrandTopic:       getEnv("KAFKA_BRAND_TOPIC", "brand.created"),
-			BrandDqlTopic:    getEnv("KAFKA_BRAND_DLQ_TOPIC", "brand.dlq"),
-			CategoryTopic:    getEnv("KAFKA_CATEGORY_TOPIC", "category.created"),
-			CategoryDlqTopic: getEnv("KAFKA_CATEGORY__DLQ_TOPIC", "category.dlq"),
+			KafkaBrokers:       kafkaGetStrings("KAFKA_BROKERS"),
+			ProductTopic:       getEnv("KAFKA_PRODUCT_TOPIC", "product.created"),
+			ProductDeleteTopic: getEnv("KAFKA_PRODUCT_DELETE_TOPIC", "product.deleted"),
+			ProdctDlqTopic:     getEnv("KAFKA_PRODUCT_DLQ_TOPIC", "product.dlq"),
+			BrandTopic:         getEnv("KAFKA_BRAND_TOPIC", "brand.created"),
+			BrandDqlTopic:      getEnv("KAFKA_BRAND_DLQ_TOPIC", "brand.dlq"),
+			CategoryTopic:      getEnv("KAFKA_CATEGORY_TOPIC", "category.created"),
+			CategoryDlqTopic:   getEnv("KAFKA_CATEGORY__DLQ_TOPIC", "category.dlq"),
 		},
 		MongoDB: MongoDB{
 			DSN: getEnv("MONGO_DB_DSN", "mongodb://mongo:27017"),
