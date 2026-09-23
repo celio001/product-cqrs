@@ -116,7 +116,7 @@ func (k *producerCommand) PublishProductDeleted(ctx context.Context, id uuid.UUI
 	defer span.End()
 	span.SetAttributes(
 		attribute.String("messaging.system", "kafka"),
-		attribute.String("messaging.destination.name", k.ProductTopic.Topic),
+		attribute.String("messaging.destination.name", k.ProductTopicDeleted.Topic),
 		attribute.String("product.id", id.String()),
 	)
 
@@ -125,8 +125,16 @@ func (k *producerCommand) PublishProductDeleted(ctx context.Context, id uuid.UUI
 	}
 	otel.GetTextMapPropagator().Inject(ctx, kafkaHeaderCarrier{headers: &kafkaHeaders})
 
-	err := k.ProductTopicDeleted.WriteMessages(ctx, kafka.Message{
+	value, err := json.Marshal(id.String())
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to serialize deleted product id")
+		span.RecordError(err)
+		return fmt.Errorf("falha ao serializar id do produto excluído: %w", err)
+	}
+
+	err = k.ProductTopicDeleted.WriteMessages(ctx, kafka.Message{
 		Headers: kafkaHeaders,
+		Value:   value,
 		Time:    time.Now(),
 	})
 	if err != nil {
