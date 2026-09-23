@@ -9,6 +9,7 @@ import (
 	brand_service "github.com/celio001/product-cqrs/worker/internal/modules/brand/service"
 	"github.com/celio001/product-cqrs/worker/internal/modules/consumer"
 	"github.com/celio001/product-cqrs/worker/internal/modules/dlq"
+	product_consumer "github.com/celio001/product-cqrs/worker/internal/modules/product/consumer"
 	product_respository "github.com/celio001/product-cqrs/worker/internal/modules/product/respository"
 	product_service "github.com/celio001/product-cqrs/worker/internal/modules/product/service"
 	"github.com/celio001/product-cqrs/worker/pkg/kafka"
@@ -68,6 +69,9 @@ func worker(cmd *cobra.Command, args []string) error {
 	productTopic := kafka.NewKafkaConsumer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProductTopic)
 	defer productTopic.Close()
 
+	productDeleteTopic := kafka.NewKafkaConsumer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProductDeleteTopic)
+	defer productTopic.Close()
+
 	productDlqTopic := kafka.NewKafkaProducer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProdctDlqTopic)
 	defer productDlqTopic.Close()
 
@@ -78,11 +82,12 @@ func worker(cmd *cobra.Command, args []string) error {
 	defer brandDlqTopic.Close()
 
 	topicsConsumer := consumer.NewConsumerTopics(productTopic, brandTopic)
+	productConsumer := product_consumer.NewProductConsumerTopics(productTopic, productDeleteTopic)
 
 	dlqTopics := dlq.NewProducerDlq(productDlqTopic, brandDlqTopic)
 
 	productRepo := product_respository.NewProductRepository(mongo)
-	productSvc := product_service.NewProductService(productRepo, topicsConsumer, dlqTopics, tracer)
+	productSvc := product_service.NewProductService(productRepo, productConsumer, dlqTopics, tracer)
 
 	brandRepo := brand_repository.NewProductRepository(mongo)
 	brandSvc := brand_service.NewBrandService(brandRepo, topicsConsumer, dlqTopics, tracer)

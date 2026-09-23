@@ -10,6 +10,7 @@ import (
 	"github.com/celio001/product-cqrs/worker/internal/modules/consumer"
 	"github.com/celio001/product-cqrs/worker/internal/modules/dlq"
 	"github.com/celio001/product-cqrs/worker/internal/modules/product"
+	product_consumer "github.com/celio001/product-cqrs/worker/internal/modules/product/consumer"
 	product_respository "github.com/celio001/product-cqrs/worker/internal/modules/product/respository"
 	"github.com/celio001/product-cqrs/worker/pkg/logger"
 	"github.com/segmentio/kafka-go"
@@ -20,22 +21,22 @@ import (
 )
 
 type productService struct {
-	productRepo   product_respository.ProductRepositoryInterface
-	consumerTopic consumer.ConsumerTopicsInterface
-	productDlq    dlq.ProducerDlqInterface
-	tracer        trace.Tracer
+	productRepo     product_respository.ProductRepositoryInterface
+	productConsumer product_consumer.ProductConsumerTopicsInterface
+	productDlq      dlq.ProducerDlqInterface
+	tracer          trace.Tracer
 }
 
 type ProductServiceInterface interface {
 	CreateProductSvc(ctx context.Context)
 }
 
-func NewProductService(productRepo product_respository.ProductRepositoryInterface, consumerTopic consumer.ConsumerTopicsInterface, productDlq dlq.ProducerDlqInterface, tracer trace.Tracer) ProductServiceInterface {
+func NewProductService(productRepo product_respository.ProductRepositoryInterface, productConsumer product_consumer.ProductConsumerTopicsInterface, productDlq dlq.ProducerDlqInterface, tracer trace.Tracer) ProductServiceInterface {
 	return &productService{
-		productRepo:   productRepo,
-		consumerTopic: consumerTopic,
-		productDlq:    productDlq,
-		tracer:        tracer,
+		productRepo:     productRepo,
+		productConsumer: productConsumer,
+		productDlq:      productDlq,
+		tracer:          tracer,
 	}
 }
 
@@ -43,7 +44,7 @@ func (s *productService) CreateProductSvc(ctx context.Context) {
 
 	for {
 
-		p, err := s.consumerTopic.ConsumerProductTopic(ctx)
+		p, err := s.productConsumer.ConsumerProductTopic(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				fmt.Println("Goroutine: Stop signal received. Shutting down worker...")
@@ -79,7 +80,7 @@ func (s *productService) processProductMessage(ctx context.Context, p kafka.Mess
 			return
 		}
 
-		err = s.consumerTopic.CommitProductTopic(messageCtx, p)
+		err = s.productConsumer.CommitProductTopic(messageCtx, p)
 		if err != nil {
 			logger.Error("error commit message",
 				zap.String("error", err.Error()),
@@ -88,7 +89,7 @@ func (s *productService) processProductMessage(ctx context.Context, p kafka.Mess
 		return
 	}
 
-	err = s.consumerTopic.CommitProductTopic(messageCtx, p)
+	err = s.productConsumer.CommitProductTopic(messageCtx, p)
 	if err != nil {
 		logger.Error("error commit message",
 			zap.String("error", err.Error()),
