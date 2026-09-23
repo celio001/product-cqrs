@@ -70,7 +70,7 @@ func worker(cmd *cobra.Command, args []string) error {
 	defer productTopic.Close()
 
 	productDeleteTopic := kafka.NewKafkaConsumer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProductDeleteTopic)
-	defer productTopic.Close()
+	defer productDeleteTopic.Close()
 
 	productDlqTopic := kafka.NewKafkaProducer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProdctDlqTopic)
 	defer productDlqTopic.Close()
@@ -96,12 +96,14 @@ func worker(cmd *cobra.Command, args []string) error {
 		func(ctx context.Context) error {
 			go productSvc.CreateProductSvc(ctx)
 			go brandSvc.CreateBrandSvc(ctx)
+			go productSvc.SoftDeleteProductSvc(ctx)
 			return nil
 		},
 		func(ctx context.Context) error {
 			return errors.Join(
 				productDlqTopic.Close(),
 				productTopic.Close(),
+				productDeleteTopic.Close(),
 				mongo.Disconnect(ctx),
 			)
 		},
