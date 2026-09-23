@@ -36,32 +36,37 @@ type JaegerConfig struct {
 }
 
 func LoadEnvs() *Configs {
-
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Printf("error loading .env file: %v", err)
 	}
 
 	return &Configs{
-		ServiceName:    os.Getenv("SERVICE_NAME"),
-		ServiceVersion: os.Getenv("SERVICE_VERSION"),
-		Env:            os.Getenv("ENV"),
+		ServiceName:    getEnv("SERVICE_NAME", "worker-sync"),
+		ServiceVersion: getEnv("SERVICE_VERSION", "1.0.0"),
+		Env:            getEnv("ENV", "development"),
 		KafkaCfg: KafkaConfig{
 			KafkaBrokers:     kafkaGetStrings("KAFKA_BROKERS"),
-			ProductTopic:     os.Getenv("KAFKA_PRODUCT_TOPIC"),
-			ProdctDlqTopic:   os.Getenv("KAFKA_PRODUCT_DLQ_TOPIC"),
-			BrandTopic:       os.Getenv("KAFKA_BRAND_TOPIC"),
-			BrandDqlTopic:    os.Getenv("KAFKA_BRAND_DLQ_TOPIC"),
-			CategoryTopic:    os.Getenv("KAFKA_CATEGORY_TOPIC"),
-			CategoryDlqTopic: os.Getenv("KAFKA_CATEGORY__DLQ_TOPIC"),
+			ProductTopic:     getEnv("KAFKA_PRODUCT_TOPIC", "product.created"),
+			ProdctDlqTopic:   getEnv("KAFKA_PRODUCT_DLQ_TOPIC", "product.dlq"),
+			BrandTopic:       getEnv("KAFKA_BRAND_TOPIC", "brand.created"),
+			BrandDqlTopic:    getEnv("KAFKA_BRAND_DLQ_TOPIC", "brand.dlq"),
+			CategoryTopic:    getEnv("KAFKA_CATEGORY_TOPIC", "category.created"),
+			CategoryDlqTopic: getEnv("KAFKA_CATEGORY__DLQ_TOPIC", "category.dlq"),
 		},
 		MongoDB: MongoDB{
-			DSN: os.Getenv("MONGO_DB_DSN"),
+			DSN: getEnv("MONGO_DB_DSN", "mongodb://mongo:27017"),
 		},
 		JaegerConfig: JaegerConfig{
-			URL: os.Getenv("JAEGER_URL"),
+			URL: getEnv("JAEGER_URL", "jaeger:4317"),
 		},
 	}
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func kafkaGetStrings(k string) []string {
