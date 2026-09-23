@@ -29,6 +29,7 @@ type productService struct {
 
 type ProductServiceInterface interface {
 	CreateProductSvc(ctx context.Context)
+	SoftDeleteProductSvc(ctx context.Context)
 }
 
 func NewProductService(productRepo product_respository.ProductRepositoryInterface, productConsumer product_consumer.ProductConsumerTopicsInterface, productDlq dlq.ProducerDlqInterface, tracer trace.Tracer) ProductServiceInterface {
@@ -58,6 +59,77 @@ func (s *productService) CreateProductSvc(ctx context.Context) {
 		}
 
 		s.processProductMessage(ctx, p)
+	}
+}
+
+func (s *productService) SoftDeleteProductSvc(ctx context.Context) {
+
+	for {
+		p, err := s.productConsumer.ConsumerProductDeleteTopic(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				fmt.Println("Goroutine: Stop signal received. Shutting down worker...")
+				return
+			}
+
+			logger.Info("error connect topic delete product",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_CONNECT_TOPIC_DELETE_PRODUCT"))
+			continue
+		}
+
+		var id string
+
+		err = json.Unmarshal(p.Value, &id)
+		if err != nil {
+			logger.Info("error value connect topic delete product",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_CONNECT_TOPIC_DELETE_PRODUCT"))
+			if dlqErr := s.productDlq.PublishProductDlq(ctx, p, err); dlqErr != nil {
+				logger.Error("error publish delete message to DLQ",
+					zap.String("error", dlqErr.Error()),
+					zap.String("event.action", "ERROR_PUBLISH_DELETE_MESSAGE_DLQ"))
+				continue
+			}
+			if commitErr := s.productConsumer.CommitProductDeleteTopic(ctx, p); commitErr != nil {
+				logger.Error("error commit invalid delete message",
+					zap.String("error", commitErr.Error()),
+					zap.String("event.action", "ERROR_COMMIT_DELETE_MESSAGE"))
+			}
+			continue
+		}
+
+		if id == "" {
+			err = errors.New("empty product id")
+			logger.Error("empty product id in delete message",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_EMPTY_PRODUCT_ID_DELETE"))
+			if dlqErr := s.productDlq.PublishProductDlq(ctx, p, err); dlqErr != nil {
+				logger.Error("error publish empty-id delete message to DLQ",
+					zap.String("error", dlqErr.Error()),
+					zap.String("event.action", "ERROR_PUBLISH_DELETE_MESSAGE_DLQ"))
+				continue
+			}
+			if commitErr := s.productConsumer.CommitProductDeleteTopic(ctx, p); commitErr != nil {
+				logger.Error("error commit empty-id delete message",
+					zap.String("error", commitErr.Error()),
+					zap.String("event.action", "ERROR_COMMIT_DELETE_MESSAGE"))
+			}
+			continue
+		}
+
+		if err = s.productRepo.SoftDeleteProductRepository(ctx, id); err != nil {
+			logger.Error("error delete product in repository",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_DELETE_PRODUCT_REPOSITORY"))
+			continue
+		}
+
+		if err = s.productConsumer.CommitProductDeleteTopic(ctx, p); err != nil {
+			logger.Error("error commit delete message",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_COMMIT_DELETE_MESSAGE"))
+		}
 	}
 }
 

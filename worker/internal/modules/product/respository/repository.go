@@ -15,6 +15,7 @@ type productRepository struct {
 
 type ProductRepositoryInterface interface {
 	CreateProductRepository(ctx context.Context, product product.Product) error
+	SoftDeleteProductRepository(ctx context.Context, id string) error
 }
 
 func NewProductRepository(client *mongo.Client) ProductRepositoryInterface {
@@ -31,5 +32,18 @@ func (c *productRepository) CreateProductRepository(ctx context.Context, product
 		return err
 	}
 
+	return nil
+}
+
+func (r *productRepository) SoftDeleteProductRepository(ctx context.Context, id string) error {
+	collection := r.client.Database("products").Collection("products")
+	
+	filter := bson.M{"id": id}
+	update := bson.M{"$set": bson.M{"status": "DISABLED"}}
+	_, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	
 	return nil
 }
