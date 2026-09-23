@@ -6,7 +6,6 @@ import (
 	"github.com/celio001/product-cqrs/product-query/internal/modules/product"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -29,10 +28,13 @@ func (r *productRepo) GetProductByID(ctx context.Context, id uuid.UUID) (product
 	var p product.Product
 
 	collection := r.c.Database("products").Collection("products")
-	filter := bson.D{primitive.E{Key: "id", Value: id.String()}}
+	filter := bson.D{
+		{Key: "id", Value: id.String()},
+		{Key: "status", Value: bson.D{{Key: "$ne", Value: "DISABLED"}}},
+	}
 
 	err := collection.FindOne(ctx, filter).Decode(&p)
-	if err!= nil{
+	if err != nil {
 		return product.Product{}, err
 	}
 
