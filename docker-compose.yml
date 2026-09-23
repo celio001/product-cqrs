@@ -61,6 +61,7 @@ services:
       ENV: development
       KAFKA_BROKERS: kafka1:9092
       KAFKA_PRODUCT_TOPIC: product.created
+      KAFKA_PRODUCT_DELETE_TOPIC: product.deleted
       KAFKA_PRODUCT_DLQ_TOPIC: product.dlq
       KAFKA_BRAND_TOPIC: brand.created
       KAFKA_CATEGORY_TOPIC: category.created
