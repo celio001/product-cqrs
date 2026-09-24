@@ -6,6 +6,10 @@ Sistema de produtos baseado em CQRS (Command Query Responsibility Segregation), 
 
 O projeto separa escrita e leitura em servicos independentes:
 
+![Arquitetura da aplicacao](docs/architecture.png)
+
+Visao geral da arquitetura, com o fluxo de comandos pelo `product-command`, propagacao de eventos pelo Kafka, sincronizacao feita pelo `worker` e consultas pelo `product-query` usando Redis e MongoDB.
+
 ```mermaid
 flowchart LR
 		Client[Cliente] --> Command[product-command\nHTTP :8081]
