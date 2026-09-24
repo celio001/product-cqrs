@@ -13,6 +13,7 @@ import (
 	product_consumer "github.com/celio001/product-cqrs/worker/internal/modules/product/consumer"
 	product_respository "github.com/celio001/product-cqrs/worker/internal/modules/product/respository"
 	"github.com/celio001/product-cqrs/worker/pkg/logger"
+	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -24,6 +25,7 @@ type productService struct {
 	productRepo     product_respository.ProductRepositoryInterface
 	productConsumer product_consumer.ProductConsumerTopicsInterface
 	productDlq      dlq.ProducerDlqInterface
+	Rd              *redis.Client
 	tracer          trace.Tracer
 }
 
@@ -32,11 +34,12 @@ type ProductServiceInterface interface {
 	SoftDeleteProductSvc(ctx context.Context)
 }
 
-func NewProductService(productRepo product_respository.ProductRepositoryInterface, productConsumer product_consumer.ProductConsumerTopicsInterface, productDlq dlq.ProducerDlqInterface, tracer trace.Tracer) ProductServiceInterface {
+func NewProductService(productRepo product_respository.ProductRepositoryInterface, productConsumer product_consumer.ProductConsumerTopicsInterface, productDlq dlq.ProducerDlqInterface, Rd *redis.Client, tracer trace.Tracer) ProductServiceInterface {
 	return &productService{
 		productRepo:     productRepo,
 		productConsumer: productConsumer,
 		productDlq:      productDlq,
+		Rd:              Rd,
 		tracer:          tracer,
 	}
 }
@@ -190,6 +193,21 @@ func (s *productService) createProductWithRetry(ctx context.Context, p kafka.Mes
 			logger.Info("product created successfully",
 				zap.String("product.name", prod.Name),
 				zap.String("event.action", "PRODUCT_CREATED_SUCCESSFULLY"))
+
+			cacheValue, marshalErr := json.Marshal(prod)
+			if marshalErr != nil {
+				logger.Error("error marshal product for cache",
+					zap.String("error", marshalErr.Error()),
+					zap.String("event.action", "ERROR_MARSHAL_CACHE_PRODUCT"))
+				return nil
+			}
+
+			err := s.Rd.Set(ctx, prod.ID, cacheValue, 5*time.Minute).Err()
+			if err != nil {
+				logger.Info("error create cache product",
+					zap.String("error", err.Error()),
+					zap.String("event.action", "ERROR_CREATE_CACHE_PRODUCT"))
+			}
 			return nil
 		}
 

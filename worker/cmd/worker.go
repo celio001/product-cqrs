@@ -17,6 +17,7 @@ import (
 	"github.com/celio001/product-cqrs/worker/pkg/logger"
 	"github.com/celio001/product-cqrs/worker/pkg/mongodb"
 	opentelemetry "github.com/celio001/product-cqrs/worker/pkg/openTelemetry"
+	"github.com/celio001/product-cqrs/worker/pkg/redis"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
@@ -62,7 +63,15 @@ func worker(cmd *cobra.Command, args []string) error {
 	err = mongo.Ping(cmd.Context(), nil)
 	if err != nil {
 		logger.Fatal("error ping mongo",
-			zap.String("error.type", "ConnectDatabse"),
+			zap.String("error.type", "ConnectMongo"),
+			zap.String("error", err.Error()))
+	}
+
+	rd := redis.ConnectRedis(cfgs.Redis.ADDR)
+	_, err = rd.Ping(cmd.Context()).Result()
+	if err != nil {
+		logger.Fatal("error ping redis",
+			zap.String("error.type", "ConnectRedis"),
 			zap.String("error", err.Error()))
 	}
 
@@ -87,7 +96,7 @@ func worker(cmd *cobra.Command, args []string) error {
 	dlqTopics := dlq.NewProducerDlq(productDlqTopic, brandDlqTopic)
 
 	productRepo := product_respository.NewProductRepository(mongo)
-	productSvc := product_service.NewProductService(productRepo, productConsumer, dlqTopics, tracer)
+	productSvc := product_service.NewProductService(productRepo, productConsumer, dlqTopics, rd, tracer)
 
 	brandRepo := brand_repository.NewProductRepository(mongo)
 	brandSvc := brand_service.NewBrandService(brandRepo, topicsConsumer, dlqTopics, tracer)
