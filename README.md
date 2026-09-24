@@ -4,46 +4,51 @@ Sistema de produtos baseado em CQRS (Command Query Responsibility Segregation), 
 
 ## Arquitetura
 
-O projeto separa escrita e leitura em servicos independentes:
+O projeto separa escrita e leitura em serviços independentes, unificados por um API Gateway:
 
 ![Arquitetura da aplicacao](docs/architecture.png)
 
-Visao geral da arquitetura, com o fluxo de comandos pelo `product-command`, propagacao de eventos pelo Kafka, sincronizacao feita pelo `worker` e consultas pelo `product-query` usando Redis e MongoDB.
+Visão geral da arquitetura, destacando o Kong API Gateway como ponto de entrada. O gateway roteia as requisições de mutação (POST, PUT, DELETE) para o `product-command` e as de leitura (GET) para o `product-query`. A sincronização de dados é garantida pelo `worker`, que consome os tópicos do Kafka, atualiza o MongoDB e gerencia a invalidação do cache no Redis.
 
 ```mermaid
 flowchart LR
-		Client[Cliente] --> Command[product-command\nHTTP :8081]
+		Client[Cliente] --> Gateway[API Gateway\nKong]
+		Gateway -- POST, PUT, DELETE --> Command[product-command]
+		Gateway -- GET --> Query[product-query]
 		Command --> Postgres[(PostgreSQL)]
 		Command --> Kafka[(Kafka)]
-		Kafka --> Worker[worker]
+		Kafka -- product.topics\ncategory.topics\nbrand.topics --> Worker[worker]
 		Worker --> Mongo[(MongoDB)]
-		Worker --> Redis[(Redis)]
-		Client --> Query[product-query\nHTTP :8082]
+		Worker -- Invalida cache --> Redis[(Redis com TTL)]
 		Query --> Redis
 		Query --> Mongo
 		Redis --> Exporter[Redis Exporter]
 		Exporter --> Prometheus[Prometheus]
 		Prometheus --> Grafana[Grafana]
-		Command -. traces .-> Jaeger[Jaeger]
-		Query -. traces/logs .-> Observability[Observabilidade]
-		Worker -. traces/logs .-> Observability
+		Command -. traces/logs .-> OTel[OpenTelemetry]
+		Query -. traces/logs .-> OTel
+		Worker -. traces/logs .-> OTel
+		OTel --> Jaeger[Jaeger]
+		OTel --> Loki[(Loki)]
+
 ```
 
 ### Componentes
 
-- `product-command`: API de escrita. Persiste produtos, marcas e categorias no PostgreSQL e publica eventos no Kafka.
-- `worker`: consome eventos Kafka, sincroniza produtos no MongoDB e popula o cache Redis.
-- `product-query`: API de leitura. Consulta Redis primeiro e usa MongoDB como fallback.
-- PostgreSQL: banco da parte de comandos.
-- MongoDB: modelo de leitura.
-- Redis: cache de produtos com TTL de 5 minutos.
-- Kafka: transporte dos eventos de domínio.
-- Prometheus, Grafana, Loki, Promtail e Jaeger: monitoramento, logs e tracing.
+* API Gateway (Kong): Ponto de entrada único. Roteia tráfego para os serviços de comandos ou consultas dependendo do método HTTP.
+* `product-command`: API de escrita. Persiste produtos, marcas e categorias no PostgreSQL e publica eventos no Kafka.
+* `worker`: consome eventos Kafka, sincroniza a base de leitura no MongoDB e **invalida o cache** no Redis quando há alterações.
+* `product-query`: API de leitura. Consulta Redis primeiro (cache-aside) e usa MongoDB como fallback, populando o cache com TTL em caso de miss.
+* PostgreSQL: banco relacional otimizado para a parte de comandos (escrita).
+* MongoDB: banco de documentos utilizado como modelo de leitura.
+* Redis: cache de produtos com TTL de 5 minutos.
+* Kafka: transporte dos eventos de domínio agrupados por entidades.
+* OpenTelemetry, Prometheus, Grafana, Loki e Jaeger: stack unificada de observabilidade para métricas, logs estruturados e distributed tracing.
 
 ## Requisitos
 
-- Docker Desktop com Docker Compose
-- Go `1.26.5` apenas para desenvolvimento local
+* Docker Desktop com Docker Compose
+* Go `1.26.5` apenas para desenvolvimento local
 
 ## Executando com Docker
 
@@ -51,51 +56,59 @@ Na raiz do projeto:
 
 ```bash
 docker compose up --build
+
 ```
 
 Para executar em segundo plano:
 
 ```bash
 docker compose up -d --build
+
 ```
 
 Para acompanhar os logs:
 
 ```bash
-docker compose logs -f product-command product-query worker
+docker compose logs -f product-command product-query worker gateway
+
 ```
 
 Para encerrar os containers:
 
 ```bash
 docker compose down
+
 ```
 
-Para remover tambem os volumes persistentes:
+Para remover também os volumes persistentes:
 
 ```bash
 docker compose down -v
+
 ```
 
 ## Endpoints
 
-### API de comandos
+Toda a comunicação externa deve ser feita através do API Gateway.
 
-Base URL: `http://localhost:8081/v1`
+### API de comandos (via Gateway)
 
-| Metodo | Rota | Descricao |
+| Método | Rota | Descrição |
 | --- | --- | --- |
 | `POST` | `/product/` | Cria um produto |
+| `PUT` | `/product/:id` | Atualiza um produto |
 | `DELETE` | `/product/:id` | Desativa um produto |
 | `POST` | `/brands/` | Cria uma marca |
+| `PUT` | `/brands/:id` | Atualiza uma marca |
 | `DELETE` | `/brands/:id` | Desativa uma marca |
 | `POST` | `/categories/` | Cria uma categoria |
+| `PUT` | `/categories/:id` | Atualiza uma categoria |
 | `DELETE` | `/categories/:id` | Desativa uma categoria |
 
-Exemplo de criacao de produto:
+Exemplo de criação de produto via Gateway:
 
 ```bash
-curl -X POST http://localhost:8081/v1/product/ \
+curl -X POST http://localhost:8000/v1/product/ \
 	-H 'Content-Type: application/json' \
 	-d '{
 		"name": "Notebook",
@@ -109,82 +122,83 @@ curl -X POST http://localhost:8081/v1/product/ \
 		},
 		"fiscal": {}
 	}'
+
 ```
 
-### API de consultas
+### API de consultas (via Gateway)
 
-Base URL: `http://localhost:8082`
-
-| Metodo | Rota | Descricao |
+| Método | Rota | Descrição |
 | --- | --- | --- |
 | `GET` | `/product/:id` | Consulta um produto por UUID |
 
 Exemplo:
 
 ```bash
-curl http://localhost:8082/product/<product-uuid>
+curl http://localhost:8000/v1/product/<product-uuid>
+
 ```
 
-O fluxo de leitura e cache-aside: primeiro consulta o Redis; em caso de cache miss, consulta o MongoDB, grava o resultado no Redis por 5 minutos e retorna o produto.
+O fluxo de leitura implementa cache-aside: em requisições GET, o `product-query` consulta o Redis. Em caso de *cache miss*, consulta o MongoDB, grava o resultado no Redis (com TTL de 5 minutos) e retorna. Modificações (PUT/DELETE/POST) disparam eventos que fazem o `worker` **invalidar** ativamente esse cache.
 
 ## Kafka
 
-O Compose cria os seguintes topicos:
+O Compose cria as seguintes famílias de tópicos, que centralizam os eventos do domínio:
 
-- `product.created`
-- `product.deleted`
-- `brand.created`
-- `category.created`
+* `product.topics` (incluindo created, updated, deleted)
+* `brand.topics`
+* `category.topics`
 
-O worker tambem utiliza `product.dlq` e os DLQs de marcas/categorias quando configurados pelas variaveis de ambiente.
+O worker também utiliza tópicos `*.dlq` (Dead Letter Queue) quando configurados pelas variáveis de ambiente para lidar com falhas de processamento.
 
 ## Portas e ferramentas
 
-| Servico | URL |
+| Serviço | URL |
 | --- | --- |
-| Product Command | `http://localhost:8081` |
-| Product Query | `http://localhost:8082` |
+| API Gateway | `http://localhost:8000` |
+| Product Command | `http://localhost:8081` (Interno) |
+| Product Query | `http://localhost:8082` (Interno) |
 | Kafka UI | `http://localhost:8080` |
 | Grafana | `http://localhost:3000` |
 | Prometheus | `http://localhost:9090` |
 | Redis Insight | `http://localhost:5540` |
-| Redis Exporter | `http://localhost:9121/metrics` |
 | Jaeger | `http://localhost:16686` |
 | Loki | `http://localhost:3100` |
 
 Credenciais padrão do Grafana:
 
-- Usuário: `admin`
-- Senha: `admin`
+* Usuário: `admin`
+* Senha: `admin`
 
-O Grafana provisiona automaticamente os datasources Prometheus, Loki e Jaeger. O Prometheus coleta o proprio servidor e o Redis Exporter.
+O Grafana provisiona automaticamente os datasources Prometheus, Loki e Jaeger via OpenTelemetry Collector.
 
-## Variaveis principais
+## Variáveis principais
 
-Os valores abaixo ja possuem defaults para o ambiente Docker:
+Os valores abaixo já possuem defaults para o ambiente Docker:
 
-| Variavel | Exemplo |
+| Variável | Exemplo |
 | --- | --- |
 | `POSTGRES_DB_DSN` | `postgres://postgres:postgres@postgres-main:5432/product?sslmode=disable` |
 | `KAFKA_BROKERS` | `kafka1:9092` |
 | `REDIS_HOST` | `redis:6379` |
 | `MONGO_DB_DSN` | `mongodb://root:MongoDB2019!@mongo:27017/?authSource=admin` |
-| `JAEGER_URL` | `jaeger:4317` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `otel-collector:4317` |
 
 ## Desenvolvimento local
 
-Cada servico Go e um modulo independente:
+Cada serviço Go é um módulo independente:
 
 ```bash
 cd product-command && go test ./...
 cd ../product-query && go test ./...
 cd ../worker && go test ./...
+
 ```
 
-Para formatar um modulo:
+Para formatar um módulo:
 
 ```bash
 go fmt ./...
+
 ```
 
 O `product-command` possui comandos de migration Atlas no Makefile:
@@ -194,10 +208,15 @@ cd product-command
 make migrate.status
 make migrate
 make migrate.diff
+
 ```
 
-## Observacoes
+## Observações
 
-- Os servicos devem usar os nomes dos containers como hostnames quando executados no Compose, por exemplo `redis:6379` e `kafka1:9092`.
-- O cache Redis e temporario. Alteracoes e exclusoes de produtos devem considerar a invalidacao da chave ou o TTL de 5 minutos.
-- O projeto possui configuracao de tracing via OpenTelemetry/Jaeger e logging estruturado nos servicos.
+* Os serviços devem usar os nomes dos containers como hostnames quando executados no Compose (ex: `redis:6379`, `kafka1:9092`).
+* A consistência do cache Redis é mantida primariamente pelo `worker`, que realiza a **invalidação da chave** no momento em que um evento de atualização ou exclusão é processado, além da segurança extra do TTL de 5 minutos.
+* Toda a emissão de traces e logs estruturados é roteada padronizadamente pelo OpenTelemetry.
+
+```
+
+```
