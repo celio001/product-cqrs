@@ -13,6 +13,7 @@ type Configs struct {
 	ServiceVersion string
 	Env            string
 	KafkaCfg       KafkaConfig
+	Redis          Redis
 	MongoDB        MongoDB
 	JaegerConfig   JaegerConfig
 }
@@ -28,6 +29,9 @@ type KafkaConfig struct {
 	CategoryDlqTopic   string
 }
 
+type Redis struct {
+	ADDR     string
+}
 type MongoDB struct {
 	DSN string
 }
@@ -54,6 +58,9 @@ func LoadEnvs() *Configs {
 			BrandDqlTopic:      getEnv("KAFKA_BRAND_DLQ_TOPIC", "brand.dlq"),
 			CategoryTopic:      getEnv("KAFKA_CATEGORY_TOPIC", "category.created"),
 			CategoryDlqTopic:   getEnv("KAFKA_CATEGORY__DLQ_TOPIC", "category.dlq"),
+		},
+		Redis: Redis{
+			ADDR:     getEnv("REDIS_HOST", "localhost:6379"),
 		},
 		MongoDB: MongoDB{
 			DSN: getEnv("MONGO_DB_DSN", "mongodb://mongo:27017"),
