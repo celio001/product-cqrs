@@ -13,10 +13,15 @@ type Config struct {
 	Env            string
 	Port           string
 	MongoDB        MongoDB
+	Redis          Redis
 }
 
 type MongoDB struct {
 	DSN string
+}
+
+type Redis struct {
+	ADDR string
 }
 
 func LoadEnvs() *Config {
@@ -31,6 +36,9 @@ func LoadEnvs() *Config {
 		Port:           getEnv("PORT", "8082"),
 		MongoDB: MongoDB{
 			DSN: getEnv("MONGO_DB_DSN", "mongodb://mongo:27017"),
+		},
+		Redis: Redis{
+			ADDR: getEnv("REDIS_HOST", "localhost:6379"),
 		},
 	}
 }

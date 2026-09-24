@@ -13,6 +13,7 @@ import (
 	"github.com/celio001/product-cqrs/product-query/pkg/lifecycle"
 	"github.com/celio001/product-cqrs/product-query/pkg/logger"
 	mongodb "github.com/celio001/product-cqrs/product-query/pkg/mongo"
+	"github.com/celio001/product-cqrs/product-query/pkg/redis"
 	"github.com/go-chi/chi"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -49,8 +50,16 @@ func apiExecute(cmd *cobra.Command, args []string) error {
 		)
 	}
 
+	rd := redis.ConnectRedis(cfgs.Redis.ADDR)
+	_, err = rd.Ping(cmd.Context()).Result()
+	if err != nil {
+		logger.Fatal("error ping redis",
+			zap.String("error.type", "ConnectRedis"),
+			zap.String("error", err.Error()))
+	}
+
 	productRepo := product_repository.NewProductRepository(mongoClient)
-	productSvc := product_service.NewProductService(productRepo)
+	productSvc := product_service.NewProductService(productRepo, rd)
 
 	r := query_router.NewSetupRouters(chi.NewRouter(), productSvc)
 
