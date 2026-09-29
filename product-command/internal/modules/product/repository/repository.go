@@ -21,8 +21,10 @@ type productRepo struct {
 }
 
 type ProductRepoInterface interface {
+	GetProductByID(ctx context.Context, id uuid.UUID) (product.Product, error)
 	CreateProductRepo(ctx context.Context, p product.Product) (product.Product, error)
 	SoftDeleteProduct(ctx context.Context, id uuid.UUID) error
+	UpdateProductRepo(ctx context.Context, p product.Product) (product.Product, error)
 
 	//init transaction
 	WithTx(tx pgx.Tx) ProductRepoInterface
@@ -43,6 +45,20 @@ func (r *productRepo) WithTx(tx pgx.Tx) ProductRepoInterface {
 
 func (r *productRepo) BeginTx(ctx context.Context) (pgx.Tx, error) {
 	return r.PgPool.Begin(ctx)
+}
+
+func (r *productRepo) GetProductByID(ctx context.Context, id uuid.UUID) (product.Product, error) {
+	query := `SELECT id, brand_id, category_id, name, sku, barcode_ean13, short_description, detailed_description, unit_of_measure, cost_price, sale_price, promotional_price, gross_weight, net_weight, height, width, length, status, created_at, updated_at FROM products WHERE id = $1 AND deleted_at IS NULL`
+
+	var p product.Product
+	err := r.Tx.DB.QueryRow(ctx, query, id).Scan(&p.ID, &p.BrandID, &p.CategoryID, &p.Name, &p.Sku, &p.BarCodeEan, &p.ShortDescription, &p.DetailedDescription, &p.UnitOfMeasure, &p.CostPrice, &p.SalePrice, &p.PromotionalPrice, &p.GrossWeight, &p.NetWeight, &p.Height, &p.Width, &p.Length, &p.Status, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return product.Product{}, ErrProductNotFound
+		}
+		return product.Product{}, err
+	}
+	return p, nil
 }
 
 func (r *productRepo) CreateProductRepo(ctx context.Context, p product.Product) (product.Product, error) {
@@ -73,3 +89,14 @@ func (r *productRepo) SoftDeleteProduct(ctx context.Context, id uuid.UUID) error
 	
 	return nil
 }
+
+func (r *productRepo) UpdateProductRepo(ctx context.Context, p product.Product) (product.Product, error) {
+	query := `UPDATE products SET brand_id = $1, category_id = $2, name = $3, sku = $4, barcode_ean13 = $5, short_description = $6, detailed_description = $7, unit_of_measure = $8, cost_price = $9, sale_price = $10, promotional_price = $11, gross_weight = $12, net_weight = $13, height = $14, width = $15, length = $16, status = $17, updated_at = now() WHERE id = $18 RETURNING id, created_at, updated_at`
+
+	err := r.Tx.DB.QueryRow(ctx, query, p.BrandID, p.CategoryID, p.Name, p.Sku, p.BarCodeEan, p.ShortDescription, p.DetailedDescription, p.UnitOfMeasure, p.CostPrice, p.SalePrice, p.PromotionalPrice, p.GrossWeight, p.NetWeight, p.Height, p.Width, p.Length, p.Status, p.ID).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return product.Product{}, err
+	}
+	return p, nil
+}
+
