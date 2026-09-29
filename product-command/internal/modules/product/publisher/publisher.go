@@ -56,6 +56,7 @@ type producerCommand struct {
 
 type ProductPublisherInterface interface {
 	PublishProductCreated(ctx context.Context, p product_dto.CreateProductResponse) error
+	PublishProductUpdated(ctx context.Context, p product_dto.UpdateProductResponse) error
 	PublishProductDeleted(ctx context.Context, id uuid.UUID) error
 }
 
@@ -83,7 +84,7 @@ func (k *producerCommand) PublishProductCreated(ctx context.Context, p product_d
 	if err != nil {
 		span.SetStatus(codes.Error, "failed to serialize product message")
 		span.RecordError(err)
-		return fmt.Errorf("falha ao serializar envelope do pedido: %w", err)
+		return fmt.Errorf("failed to serialize product message: %w", err)
 	}
 
 	kafkaHeaders := []kafka.Header{
@@ -110,6 +111,48 @@ func (k *producerCommand) PublishProductCreated(ctx context.Context, p product_d
 	return nil
 }
 
+func (k *producerCommand) PublishProductUpdated(ctx context.Context, p product_dto.UpdateProductResponse) error {
+	
+	ctx, span := k.tracer.Start(ctx, "kafka.produce.event-submitted")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("messaging.system", "kafka"),
+		attribute.String("messaging.destination.name", k.ProductTopic.Topic),
+		attribute.String("product.id", p.ID.String()),
+	)
+	
+	valueBytes, err := json.Marshal(p)
+	if err != nil {
+		span.SetStatus(codes.Error, "failed to serialize product message")
+		span.RecordError(err)
+		return fmt.Errorf("failed to serialize product message: %w", err)
+	}
+	
+	kafkaHeaders := []kafka.Header{
+		{Key: "event_type", Value: []byte("product.updated")},
+	}
+
+	otel.GetTextMapPropagator().Inject(ctx, kafkaHeaderCarrier{headers: &kafkaHeaders})
+	
+	err = k.ProductTopic.WriteMessages(ctx, kafka.Message{
+		Value:   valueBytes,
+		Headers: kafkaHeaders,
+		Time:    time.Now(),
+	})
+	if err != nil {
+		logger.Error("failed to publish the message product updated",
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "ERROR_PUBLISH_UPDATE_PRODUCT"),
+		)
+		span.SetStatus(codes.Error, "failed to publish product message")
+		span.RecordError(err)
+		return err
+	}
+	
+	return nil
+}
+
 func (k *producerCommand) PublishProductDeleted(ctx context.Context, id uuid.UUID) error {
 	ctx, span := k.tracer.Start(ctx, "kafka.produce.event-submitted")
 
@@ -129,7 +172,7 @@ func (k *producerCommand) PublishProductDeleted(ctx context.Context, id uuid.UUI
 	if err != nil {
 		span.SetStatus(codes.Error, "failed to serialize deleted product id")
 		span.RecordError(err)
-		return fmt.Errorf("falha ao serializar id do produto excluído: %w", err)
+		return fmt.Errorf("failed to serialize deleted product id: %w", err)
 	}
 
 	err = k.ProductTopicDeleted.WriteMessages(ctx, kafka.Message{
