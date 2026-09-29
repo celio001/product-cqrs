@@ -27,6 +27,7 @@ type productHandler struct {
 type ProductHandlerInterface interface {
 	CreateProductHandler(c fiber.Ctx) error
 	SoftDeleteProductHandler(c fiber.Ctx) error
+	UpdateProductHandler(c fiber.Ctx) error
 }
 
 func NewProductHandler(productSvc product_service.ProductSvcInterface) ProductHandlerInterface {
@@ -133,7 +134,84 @@ func (h *productHandler) SoftDeleteProductHandler(c fiber.Ctx) error {
 		Send(c)
 }
 
+func (h *productHandler) UpdateProductHandler(c fiber.Ctx) error {
+	var request product_dto.UpdateProductRequest
+	
+	if err := c.Bind().Body(&request); err != nil {
+		logger.Error("invalid update product body",
+			zap.String("error.type", "ValidateError"),
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "INVALID_UPDATE_PRODUCT_BODY"))
+		return response.New().
+			Status(http.StatusBadRequest).
+			Message(err.Error()).
+			Error("INVALID_BODY_UPDATE_PRODUCT").
+			Send(c)
+	}
+	
+	if err := validate.Struct(request); err != nil {
+		logger.Error("invalid update product payload",
+			zap.String("error.type", "ValidateError"),
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "INVALID_UPDATE_PRODUCT_PAYLOAD"))
+				
+		return response.New().
+			Status(http.StatusBadRequest).
+			Message("ïnvalid request data").
+			Error(validate_errors.ProductValidateError(err)).
+			Send(c)
+	}
+	
+	p := requestToUpdatedProduct(request)
+	i := requestToUpdatedInventory(request)
+	f := responseToUpdatedFiscal(request)
+
+	resp, err := h.productSvc.UpdateProductSvc(c.Context(), p, i, f)
+	if err != nil {
+		logger.Error("failed to update product",
+			zap.String("error.message", err.Error()),
+			zap.String("error.code", "ERROR_UPDATE_PRODUCT"),
+			zap.String("product.id", resp.ID.String()),
+		)
+		return response.New().
+			Status(http.StatusInternalServerError).
+			Message(err.Error()).
+			Error("ERROR_UPDATE_PRODUCT").
+			Send(c)
+	}
+
+	logger.Info("product updated successfully",
+		zap.String("product.id", resp.ID.String()),
+		zap.String("event.action", "PRODUCT_UPDATED_SUCCESS"))
+		
+	return response.New().
+		Status(http.StatusOK).
+		Message("Product updated successfully").
+		Data(resp).
+		Send(c)
+}
+
 func requestToProduct(r product_dto.CreateProductRequest) product.Product {
+	return product.Product{
+		BrandID:          r.BrandID,
+		CategoryID:       r.CategoryID,
+		Name:             r.Name,
+		Sku:              r.Sku,
+		BarCodeEan:       r.BarCodeEan,
+		ShortDescription: r.ShortDescription,
+		UnitOfMeasure:    r.UnitOfMeasure,
+		CostPrice:        r.CostPrice,
+		SalePrice:        r.SalePrice,
+		PromotionalPrice: r.PromotionalPrice,
+		GrossWeight:      r.GrossWeight,
+		NetWeight:        r.NetWeight,
+		Height:           r.Height,
+		Width:            r.Width,
+		Length:           r.Length,
+		Status:           r.Status,
+	}
+}
+func requestToUpdatedProduct(r product_dto.UpdateProductRequest) product.Product {
 	return product.Product{
 		BrandID:          r.BrandID,
 		CategoryID:       r.CategoryID,
@@ -162,8 +240,28 @@ func requestToInventory(r product_dto.CreateProductRequest) inventory.Inventory 
 		MaximumStock:      r.Stock.MaximumStock,
 	}
 }
+func requestToUpdatedInventory(r product_dto.UpdateProductRequest) inventory.Inventory {
+	return inventory.Inventory{
+		LocationAisle:     r.Stock.LocationAisle,
+		QuantityAvailable: r.Stock.QuantityAvailable,
+		MinimumStock:      r.Stock.MinimumStock,
+		MaximumStock:      r.Stock.MaximumStock,
+	}
+}
 
 func responseToFiscal(r product_dto.CreateProductRequest) fiscal.FiscalData {
+	return fiscal.FiscalData{
+		NcmCode:    r.Fiscal.NcmCode,
+		CestCode:   r.Fiscal.CestCode,
+		OriginCode: r.Fiscal.OriginCode,
+		IcmsRate:   r.Fiscal.IcmsRate,
+		PisRate:    r.Fiscal.PisRate,
+		CofinsRate: r.Fiscal.CofinsRate,
+		IpiRate:    r.Fiscal.IpiRate,
+	}
+}
+
+func responseToUpdatedFiscal(r product_dto.UpdateProductRequest) fiscal.FiscalData {
 	return fiscal.FiscalData{
 		NcmCode:    r.Fiscal.NcmCode,
 		CestCode:   r.Fiscal.CestCode,
