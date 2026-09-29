@@ -16,6 +16,7 @@ type fiscalRepository struct {
 
 type FiscalRepositoryInterface interface {
 	CreateFiscalData(ctx context.Context, f fiscal.FiscalData) (fiscal.FiscalData, error)
+	UpdateFiscalData(ctx context.Context, f fiscal.FiscalData) (fiscal.FiscalData, error)
 
 	//init transaction
 	WithTx(tx pgx.Tx) FiscalRepositoryInterface
@@ -52,5 +53,19 @@ func (r *fiscalRepository) CreateFiscalData(ctx context.Context, f fiscal.Fiscal
 		return fiscal.FiscalData{}, err
 	}
 
+	return f, nil
+}
+
+func (r *fiscalRepository) UpdateFiscalData(ctx context.Context, f fiscal.FiscalData) (fiscal.FiscalData, error) {
+	query := `UPDATE product_fiscal_data 
+	SET ncm_code = $1, cest_code = $2, origin_code = $3, icms_rate = $4, pis_rate = $5, cofins_rate = $6, ipi_rate = $7, updated_at = NOW()
+	WHERE product_id = $8
+	RETURNING id, updated_at`
+	
+	err := r.Tx.DB.QueryRow(ctx, query, f.NcmCode, f.CestCode, f.OriginCode, f.IcmsRate, f.PisRate, f.CofinsRate, f.IpiRate, f.ProductId).Scan(&f.ID, &f.UpdatedAt)
+	if err != nil {
+		return fiscal.FiscalData{}, err
+	}
+	
 	return f, nil
 }
