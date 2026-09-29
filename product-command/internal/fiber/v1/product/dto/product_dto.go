@@ -70,6 +70,53 @@ type CreateProductResponse struct {
 	Fiscal              FiscalProductResponse    `json:"fiscal"`
 }
 
+type UpdateProductRequest struct {
+	BrandID             uuid.UUID                `json:"brand_id,omitempty" validate:"omitempty,uuid"`
+	CategoryID          uuid.UUID                `json:"category_id,omitempty" validate:"omitempty,uuid"`
+	Name                string                   `json:"name,omitempty" validate:"omitempty,min=1,max=255"`
+	Sku                 string                   `json:"sku,omitempty" validate:"omitempty,max=50"`
+	BarCodeEan          string                   `json:"barcode_ean13,omitempty" validate:"omitempty,max=13"`
+	ShortDescription    string                   `json:"short_description,omitempty" validate:"omitempty,max=255"`
+	DetailedDescription string                   `json:"detailed_description,omitempty"`
+	UnitOfMeasure       string                   `json:"unit_of_measure,omitempty" validate:"omitempty,max=10"`
+	CostPrice           float64                  `json:"cost_price,omitempty" validate:"omitempty,min=0"`
+	SalePrice           float64                  `json:"sale_price,omitempty" validate:"omitempty,min=0"`
+	PromotionalPrice    float64                  `json:"promotional_price,omitempty" validate:"omitempty,min=0"`
+	GrossWeight         float64                  `json:"gross_weight,omitempty" validate:"omitempty,min=0"`
+	NetWeight           float64                  `json:"net_weight,omitempty" validate:"omitempty,min=0"`
+	Height              float64                  `json:"height,omitempty" validate:"omitempty,min=0"`
+	Width               float64                  `json:"width,omitempty" validate:"omitempty,min=0"`
+	Length              float32                  `json:"length,omitempty" validate:"omitempty,min=0"`
+	Status              string                   `json:"status,omitempty" validate:"omitempty,oneof=ACTIVE INACTIVE"`
+	Stock               InventoryProductRequest  `json:"stock,omitempty"`
+	Fiscal              FiscalProductRequest     `json:"fiscal,omitempty"`
+}
+
+type UpdateProductResponse struct {
+	ID                  uuid.UUID                `json:"id"`
+	BrandID             uuid.UUID                `json:"brand_id,omitempty"`
+	CategoryID          uuid.UUID                `json:"category_id,omitempty"`
+	Name                string                   `json:"name"`
+	Sku                 string                   `json:"sku"`
+	BarCodeEan          string                   `json:"barcode_ean13,omitempty"`
+	ShortDescription    string                   `json:"short_description,omitempty"`
+	DetailedDescription string                   `json:"detailed_description,omitempty"`
+	UnitOfMeasure       string                   `json:"unit_of_measure"`
+	CostPrice           float64                  `json:"cost_price"`
+	SalePrice           float64                  `json:"sale_price"`
+	PromotionalPrice    float64                  `json:"promotional_price,omitempty"`
+	GrossWeight         float64                  `json:"gross_weight,omitempty"`
+	NetWeight           float64                  `json:"net_weight,omitempty"`
+	Height              float64                  `json:"height,omitempty"`
+	Width			   float64                  `json:"width,omitempty"`
+	Length              float32                  `json:"length,omitempty"`
+	Status              string				   `json:"status"`
+	CreatedAt           time.Time                `json:"created_at"`
+	UpdatedAt           time.Time                `json:"updated_at"`
+	Stock               InventoryProductResponse `json:"stock"`
+	Fiscal              FiscalProductResponse    `json:"fiscal"`
+}
+
 type InventoryProductResponse struct {
 	ID                uuid.UUID `json:"id"`
 	ProductID         uuid.UUID `json:"product_id"`
