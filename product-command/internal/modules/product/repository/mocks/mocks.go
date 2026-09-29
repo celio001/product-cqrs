@@ -44,6 +44,14 @@ func (mr *MockProductRepoInterfaceMockRecorder) BeginTx(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTx", reflect.TypeOf((*MockProductRepoInterface)(nil).BeginTx), ctx)
 }
 
+func (m *MockProductRepoInterface) GetProductByID(ctx context.Context, id uuid.UUID) (database_product.Product, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProductByID", ctx, id)
+	ret0, _ := ret[0].(database_product.Product)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
 func (m *MockProductRepoInterface) CreateProductRepo(ctx context.Context, p database_product.Product) (database_product.Product, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateProductRepo", ctx, p)
@@ -67,6 +75,14 @@ func (m *MockProductRepoInterface) SoftDeleteProduct(ctx context.Context, id uui
 func (mr *MockProductRepoInterfaceMockRecorder) SoftDeleteProduct(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SoftDeleteProduct", reflect.TypeOf((*MockProductRepoInterface)(nil).SoftDeleteProduct), ctx, id)
+}
+
+func (m *MockProductRepoInterface) UpdateProductRepo(ctx context.Context, p database_product.Product) (database_product.Product, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateProductRepo", ctx, p)
+	ret0, _ := ret[0].(database_product.Product)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 func (m *MockProductRepoInterface) WithTx(tx pgx.Tx) product_repository.ProductRepoInterface {
