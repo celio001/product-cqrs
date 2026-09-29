@@ -42,6 +42,19 @@ func (m *MockProductSvcInterface) CreateProductSvc(ctx context.Context, p produc
 	return ret0, ret1
 }
 
+func (m *MockProductSvcInterface) UpdateProductSvc(ctx context.Context, p product.Product, i inventory.Inventory, f fiscal.FiscalData) (product.Product, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateProductSvc", ctx, p, i, f)
+	ret0, _ := ret[0].(product.Product)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (mr *MockProductSvcInterfaceMockRecorder) UpdateProductSvc(ctx, p, i, f any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateProductSvc", reflect.TypeOf((*MockProductSvcInterface)(nil).UpdateProductSvc), ctx, p, i, f)
+}
+
 func (mr *MockProductSvcInterfaceMockRecorder) CreateProductSvc(ctx, p, i, f any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateProductSvc", reflect.TypeOf((*MockProductSvcInterface)(nil).CreateProductSvc), ctx, p, i, f)
