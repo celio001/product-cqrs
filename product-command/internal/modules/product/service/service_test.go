@@ -17,13 +17,14 @@ import (
 	inventory_repository "github.com/celio001/product-command/internal/modules/inventory/repository"
 	"github.com/celio001/product-command/internal/modules/product"
 	product_publisher "github.com/celio001/product-command/internal/modules/product/publisher"
-	product_repository "github.com/celio001/product-command/internal/modules/product/repository"
+	product_repo_mocks "github.com/celio001/product-command/internal/modules/product/repository/mocks"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/mock/gomock"
 )
 
 type serviceTx struct {
@@ -58,30 +59,6 @@ func (t *serviceTx) Query(context.Context, string, ...any) (pgx.Rows, error) { r
 func (t *serviceTx) QueryRow(context.Context, string, ...any) pgx.Row        { return nil }
 func (t *serviceTx) Conn() *pgx.Conn                                         { return nil }
 
-type serviceProductRepo struct {
-	tx                  pgx.Tx
-	beginErr            error
-	createProductFn     func(context.Context, product.Product) (product.Product, error)
-	softDeleteProductFn func(context.Context, uuid.UUID) error
-}
-
-func (r *serviceProductRepo) BeginTx(context.Context) (pgx.Tx, error) { return r.tx, r.beginErr }
-func (r *serviceProductRepo) WithTx(pgx.Tx) product_repository.ProductRepoInterface {
-	return r
-}
-func (r *serviceProductRepo) CreateProductRepo(ctx context.Context, p product.Product) (product.Product, error) {
-	if r.createProductFn != nil {
-		return r.createProductFn(ctx, p)
-	}
-	return p, nil
-}
-func (r *serviceProductRepo) SoftDeleteProduct(ctx context.Context, id uuid.UUID) error {
-	if r.softDeleteProductFn != nil {
-		return r.softDeleteProductFn(ctx, id)
-	}
-	return nil
-}
-
 type serviceInventoryRepo struct {
 	createFn func(context.Context, inventory.Inventory) (inventory.Inventory, error)
 }
@@ -92,6 +69,9 @@ func (r *serviceInventoryRepo) CreateInventoryRepo(ctx context.Context, i invent
 	if r.createFn != nil {
 		return r.createFn(ctx, i)
 	}
+	return i, nil
+}
+func (r *serviceInventoryRepo) UpdateInventoryRepo(_ context.Context, i inventory.Inventory) (inventory.Inventory, error) {
 	return i, nil
 }
 
@@ -105,6 +85,9 @@ func (r *serviceFiscalRepo) CreateFiscalData(ctx context.Context, f fiscal.Fisca
 	if r.createFn != nil {
 		return r.createFn(ctx, f)
 	}
+	return f, nil
+}
+func (r *serviceFiscalRepo) UpdateFiscalData(_ context.Context, f fiscal.FiscalData) (fiscal.FiscalData, error) {
 	return f, nil
 }
 
@@ -140,12 +123,19 @@ func (r *serviceBrandRepo) BeginTx(context.Context) (pgx.Tx, error)             
 
 type servicePublisher struct {
 	createdFn func(context.Context, product_dto.CreateProductResponse) error
+	updatedFn func(context.Context, product_dto.UpdateProductResponse) error
 	deletedFn func(context.Context, uuid.UUID) error
 }
 
 func (p *servicePublisher) PublishProductCreated(ctx context.Context, response product_dto.CreateProductResponse) error {
 	if p.createdFn != nil {
 		return p.createdFn(ctx, response)
+	}
+	return nil
+}
+func (p *servicePublisher) PublishProductUpdated(ctx context.Context, response product_dto.UpdateProductResponse) error {
+	if p.updatedFn != nil {
+		return p.updatedFn(ctx, response)
 	}
 	return nil
 }
@@ -157,7 +147,6 @@ func (p *servicePublisher) PublishProductDeleted(ctx context.Context, id uuid.UU
 }
 
 var (
-	_ product_repository.ProductRepoInterface     = (*serviceProductRepo)(nil)
 	_ inventory_repository.InventoryRepoInterface = (*serviceInventoryRepo)(nil)
 	_ fiscal_repository.FiscalRepositoryInterface = (*serviceFiscalRepo)(nil)
 	_ categories_repository.CategoriesInterface   = (*serviceCategoryRepo)(nil)
@@ -182,18 +171,23 @@ func TestCreateProductSvc(t *testing.T) {
 	createdProduct.CreatedAt = timestamp
 	createdProduct.UpdatedAt = timestamp
 
+	ctrl := gomock.NewController(t)
+	productRepo := product_repo_mocks.NewMockProductRepoInterface(ctrl)
+	productRepo.EXPECT().BeginTx(gomock.Any()).Return(tx, nil)
+	productRepo.EXPECT().WithTx(tx).Return(productRepo)
+	productRepo.EXPECT().CreateProductRepo(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, p product.Product) (product.Product, error) {
+			assert.Equal(t, categoryID, p.CategoryID)
+			assert.Equal(t, brandID, p.BrandID)
+			return createdProduct, nil
+		},
+	)
+
 	var receivedInventory inventory.Inventory
 	var receivedFiscal fiscal.FiscalData
 	var published product_dto.CreateProductResponse
 	svc := NewProductSvc(
-		&serviceProductRepo{
-			tx: tx,
-			createProductFn: func(_ context.Context, p product.Product) (product.Product, error) {
-				assert.Equal(t, categoryID, p.CategoryID)
-				assert.Equal(t, brandID, p.BrandID)
-				return createdProduct, nil
-			},
-		},
+		productRepo,
 		&serviceFiscalRepo{createFn: func(_ context.Context, f fiscal.FiscalData) (fiscal.FiscalData, error) {
 			receivedFiscal = f
 			f.ID = fiscalID
@@ -231,8 +225,9 @@ func TestCreateProductSvc(t *testing.T) {
 func TestCreateProductSvcReturnsCategoryError(t *testing.T) {
 	categoryErr := errors.New("category unavailable")
 	tx := &serviceTx{}
+	productRepo := product_repo_mocks.NewMockProductRepoInterface(gomock.NewController(t))
 	svc := NewProductSvc(
-		&serviceProductRepo{tx: tx},
+		productRepo,
 		&serviceFiscalRepo{},
 		&serviceInventoryRepo{},
 		&serviceCategoryRepo{err: categoryErr},
@@ -251,10 +246,12 @@ func TestCreateProductSvcReturnsCategoryError(t *testing.T) {
 func TestCreateProductSvcRollsBackWhenProductCreationFails(t *testing.T) {
 	productErr := errors.New("product creation failed")
 	tx := &serviceTx{}
+	productRepo := product_repo_mocks.NewMockProductRepoInterface(gomock.NewController(t))
+	productRepo.EXPECT().BeginTx(gomock.Any()).Return(tx, nil)
+	productRepo.EXPECT().WithTx(tx).Return(productRepo)
+	productRepo.EXPECT().CreateProductRepo(gomock.Any(), gomock.Any()).Return(product.Product{}, productErr)
 	svc := NewProductSvc(
-		&serviceProductRepo{tx: tx, createProductFn: func(context.Context, product.Product) (product.Product, error) {
-			return product.Product{}, productErr
-		}},
+		productRepo,
 		&serviceFiscalRepo{},
 		&serviceInventoryRepo{},
 		&serviceCategoryRepo{category: categories.Categories{ID: uuid.New()}},
@@ -274,9 +271,13 @@ func TestSoftDeleteProductSvc(t *testing.T) {
 	ctx := context.Background()
 	productID := uuid.New()
 	tx := &serviceTx{}
+	productRepo := product_repo_mocks.NewMockProductRepoInterface(gomock.NewController(t))
+	productRepo.EXPECT().BeginTx(gomock.Any()).Return(tx, nil)
+	productRepo.EXPECT().WithTx(tx).Return(productRepo)
+	productRepo.EXPECT().SoftDeleteProduct(gomock.Any(), productID).Return(nil)
 	var publishedID uuid.UUID
 	svc := NewProductSvc(
-		&serviceProductRepo{tx: tx},
+		productRepo,
 		&serviceFiscalRepo{},
 		&serviceInventoryRepo{},
 		&serviceCategoryRepo{},
@@ -299,8 +300,12 @@ func TestSoftDeleteProductSvc(t *testing.T) {
 func TestSoftDeleteProductSvcRollsBackWhenPublishingFails(t *testing.T) {
 	publishErr := errors.New("publish failed")
 	tx := &serviceTx{}
+	productRepo := product_repo_mocks.NewMockProductRepoInterface(gomock.NewController(t))
+	productRepo.EXPECT().BeginTx(gomock.Any()).Return(tx, nil)
+	productRepo.EXPECT().WithTx(tx).Return(productRepo)
+	productRepo.EXPECT().SoftDeleteProduct(gomock.Any(), gomock.Any()).Return(nil)
 	svc := NewProductSvc(
-		&serviceProductRepo{tx: tx},
+		productRepo,
 		&serviceFiscalRepo{},
 		&serviceInventoryRepo{},
 		&serviceCategoryRepo{},
