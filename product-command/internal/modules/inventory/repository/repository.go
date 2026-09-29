@@ -16,6 +16,7 @@ type inventoryRepo struct {
 
 type InventoryRepoInterface interface {
 	CreateInventoryRepo(ctx context.Context, i inventory.Inventory) (inventory.Inventory, error)
+	UpdateInventoryRepo(ctx context.Context, i inventory.Inventory) (inventory.Inventory, error)
 
 	//init transaction
 	WithTx(tx pgx.Tx) InventoryRepoInterface
@@ -47,6 +48,19 @@ func (r *inventoryRepo) CreateInventoryRepo(ctx context.Context, i inventory.Inv
 	VALUES($1,$2,$3,$4,$5)
 	RETURNING id, updated_at`
 	err := r.Tx.DB.QueryRow(ctx, query, i.ProductID, i.LocationAisle, i.QuantityAvailable, i.MinimumStock, i.MaximumStock).Scan(&i.ID, &i.UpdatedAt)
+	if err != nil {
+		return inventory.Inventory{}, err
+	}
+
+	return i, nil
+}
+
+func (r *inventoryRepo) UpdateInventoryRepo(ctx context.Context, i inventory.Inventory) (inventory.Inventory, error) {
+	query := `UPDATE product_inventory 
+	SET location_aisle = $1, quantity_available = $2, minimum_stock = $3, maximum_stock = $4, updated_at = NOW()
+	WHERE product_id = $5
+	RETURNING id, updated_at`
+	err := r.Tx.DB.QueryRow(ctx, query, i.LocationAisle, i.QuantityAvailable, i.MinimumStock, i.MaximumStock, i.ProductID).Scan(&i.ID, &i.UpdatedAt)
 	if err != nil {
 		return inventory.Inventory{}, err
 	}
