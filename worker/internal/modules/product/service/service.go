@@ -32,6 +32,7 @@ type productService struct {
 type ProductServiceInterface interface {
 	CreateProductSvc(ctx context.Context)
 	SoftDeleteProductSvc(ctx context.Context)
+	UpdateProductSvc(ctx context.Context) error
 }
 
 func NewProductService(productRepo product_respository.ProductRepositoryInterface, productConsumer product_consumer.ProductConsumerTopicsInterface, productDlq dlq.ProducerDlqInterface, Rd *redis.Client, tracer trace.Tracer) ProductServiceInterface {
@@ -133,6 +134,57 @@ func (s *productService) SoftDeleteProductSvc(ctx context.Context) {
 				zap.String("error", err.Error()),
 				zap.String("event.action", "ERROR_COMMIT_DELETE_MESSAGE"))
 		}
+	}
+}
+
+func (s *productService) UpdateProductSvc(ctx context.Context) error {
+
+	for {
+		p, err := s.productConsumer.ConsumerProductUpdateTopic(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				fmt.Println("Goroutine: Stop signal received. Shutting down worker...")
+				return err
+			}
+
+			logger.Info("error connect topic update product",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_CONNECT_TOPIC_UPDATE_PRODUCT"))
+			continue
+		}
+
+		var prod product.Product
+
+		err = json.Unmarshal(p.Value, &prod)
+		if err != nil {
+			logger.Info("error connect topic create product",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_CONNECT_TOPIC_CREATE_PRODUCT"))
+			return err
+		}
+
+		err = s.productRepo.UpdateProductRepository(ctx, prod)
+		if err != nil {
+			if errors.Is(err, product_respository.ErrProductNotFound) {
+				logger.Error("product not found in repository",
+					zap.String("error", err.Error()),
+					zap.String("event.action", "ERROR_PRODUCT_NOT_FOUND_REPOSITORY"))
+				return err
+			}
+			logger.Error("error update product in repository",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_UPDATE_PRODUCT_REPOSITORY"))
+			return err
+		}
+
+		err = s.productConsumer.CommitProductUpdateTopic(ctx, p)
+		if err != nil {
+			logger.Error("error commit update message",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_COMMIT_UPDATE_MESSAGE"))
+			return err
+		}
+
 	}
 }
 
