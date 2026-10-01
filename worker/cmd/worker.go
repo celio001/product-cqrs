@@ -78,6 +78,9 @@ func worker(cmd *cobra.Command, args []string) error {
 	productTopic := kafka.NewKafkaConsumer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProductTopic)
 	defer productTopic.Close()
 
+	productTopicUpdate := kafka.NewKafkaConsumer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProductUpdateTopic)
+	defer productTopicUpdate.Close()
+
 	productDeleteTopic := kafka.NewKafkaConsumer(cfgs.KafkaCfg.KafkaBrokers, cfgs.KafkaCfg.ProductDeleteTopic)
 	defer productDeleteTopic.Close()
 
@@ -91,7 +94,7 @@ func worker(cmd *cobra.Command, args []string) error {
 	defer brandDlqTopic.Close()
 
 	topicsConsumer := consumer.NewConsumerTopics(productTopic, brandTopic)
-	productConsumer := product_consumer.NewProductConsumerTopics(productTopic, productDeleteTopic)
+	productConsumer := product_consumer.NewProductConsumerTopics(productTopic, productTopicUpdate, productDeleteTopic)
 
 	dlqTopics := dlq.NewProducerDlq(productDlqTopic, brandDlqTopic)
 
