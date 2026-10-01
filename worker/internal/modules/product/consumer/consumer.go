@@ -33,8 +33,9 @@ func (c *KafkaHeaderCarrier) Keys() []string {
 }
 
 type ProductConsumerTopics struct {
-	ProductTopic       *kafka.Reader
-	ProductDeleteTopic *kafka.Reader
+	ProductTopic        *kafka.Reader
+	ProductUpdateTopic  *kafka.Reader
+	ProductDeleteTopic  *kafka.Reader
 }
 
 type ProductConsumerTopicsInterface interface {
@@ -45,12 +46,14 @@ type ProductConsumerTopicsInterface interface {
 	ConsumerProductDeleteTopic(ctx context.Context) (kafka.Message, error)
 	CommitProductDeleteTopic(ctx context.Context, message kafka.Message) error
 
-
+	ConsumerProductUpdateTopic(ctx context.Context) (kafka.Message, error)
+	CommitProductUpdateTopic(ctx context.Context, message kafka.Message) error
 }
 
-func NewProductConsumerTopics(ProductTopic *kafka.Reader, ProductDeleteTopic *kafka.Reader) ProductConsumerTopicsInterface {
+func NewProductConsumerTopics(ProductTopic *kafka.Reader, ProductUpdateTopic *kafka.Reader, ProductDeleteTopic *kafka.Reader) ProductConsumerTopicsInterface {
 	return &ProductConsumerTopics{
 		ProductTopic:       ProductTopic,
+		ProductUpdateTopic: ProductUpdateTopic,
 		ProductDeleteTopic: ProductDeleteTopic,
 	}
 }
@@ -84,6 +87,23 @@ func (k *ProductConsumerTopics) ConsumerProductDeleteTopic(ctx context.Context) 
 
 func (k *ProductConsumerTopics) CommitProductDeleteTopic(ctx context.Context, message kafka.Message) error {
 	err := k.ProductDeleteTopic.CommitMessages(ctx, message)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (k *ProductConsumerTopics) ConsumerProductUpdateTopic(ctx context.Context) (kafka.Message, error) {
+	kmessage, err := k.ProductUpdateTopic.FetchMessage(ctx)
+	if err != nil {
+		return kafka.Message{}, err
+	}
+
+	return kmessage, nil
+}
+
+func (k *ProductConsumerTopics) CommitProductUpdateTopic(ctx context.Context, message kafka.Message) error {
+	err := k.ProductUpdateTopic.CommitMessages(ctx, message)
 	if err != nil {
 		return err
 	}
