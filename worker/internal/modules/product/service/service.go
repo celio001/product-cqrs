@@ -129,6 +129,13 @@ func (s *productService) SoftDeleteProductSvc(ctx context.Context) {
 			continue
 		}
 
+		if err = s.Rd.Del(ctx, id).Err(); err != nil {
+			logger.Error("error invalidate product cache",
+				zap.String("error", err.Error()),
+				zap.String("event.action", "ERROR_INVALIDATE_PRODUCT_CACHE"))
+			continue
+		}
+
 		if err = s.productConsumer.CommitProductDeleteTopic(ctx, p); err != nil {
 			logger.Error("error commit delete message",
 				zap.String("error", err.Error()),
