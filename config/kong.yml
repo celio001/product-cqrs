@@ -23,14 +23,6 @@ services:
         methods:
           - GET
         strip_path: false
-        plugins:
-          - name: proxy-cache
-            config:
-              request_method: ["GET"]
-              response_code: [200]
-              content_type: ["application/json"]
-              cache_ttl: 30
-              strategy: memory
   
 plugins:
   - name: prometheus
