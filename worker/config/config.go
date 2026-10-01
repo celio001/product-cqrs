@@ -21,6 +21,7 @@ type Configs struct {
 type KafkaConfig struct {
 	KafkaBrokers       []string
 	ProductTopic       string
+	ProductUpdateTopic string
 	ProductDeleteTopic string
 	ProdctDlqTopic     string
 	BrandTopic         string
@@ -30,7 +31,7 @@ type KafkaConfig struct {
 }
 
 type Redis struct {
-	ADDR     string
+	ADDR string
 }
 type MongoDB struct {
 	DSN string
@@ -52,6 +53,7 @@ func LoadEnvs() *Configs {
 		KafkaCfg: KafkaConfig{
 			KafkaBrokers:       kafkaGetStrings("KAFKA_BROKERS"),
 			ProductTopic:       getEnv("KAFKA_PRODUCT_TOPIC", "product.created"),
+			ProductUpdateTopic: getEnv("KAFKA_PRODUCT_UPDATE_TOPIC", "product.updated"),
 			ProductDeleteTopic: getEnv("KAFKA_PRODUCT_DELETE_TOPIC", "product.deleted"),
 			ProdctDlqTopic:     getEnv("KAFKA_PRODUCT_DLQ_TOPIC", "product.dlq"),
 			BrandTopic:         getEnv("KAFKA_BRAND_TOPIC", "brand.created"),
@@ -60,7 +62,7 @@ func LoadEnvs() *Configs {
 			CategoryDlqTopic:   getEnv("KAFKA_CATEGORY__DLQ_TOPIC", "category.dlq"),
 		},
 		Redis: Redis{
-			ADDR:     getEnv("REDIS_HOST", "localhost:6379"),
+			ADDR: getEnv("REDIS_HOST", "localhost:6379"),
 		},
 		MongoDB: MongoDB{
 			DSN: getEnv("MONGO_DB_DSN", "mongodb://mongo:27017"),
