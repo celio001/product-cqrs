@@ -43,11 +43,11 @@ flowchart LR
 
 * API Gateway (Kong): Ponto de entrada único. Roteia tráfego para os serviços de comandos ou consultas dependendo do método HTTP.
 * `product-command`: API de escrita. Persiste produtos, marcas e categorias no PostgreSQL e publica eventos de domínio no Kafka.
-* `worker`: consome `product.created`, `product.deleted` e `brand.created`. Sincroniza produtos e marcas no MongoDB; ao processar a criação de um produto, também grava o produto no Redis. A exclusão altera o status no MongoDB, mas atualmente não remove a chave do Redis. O worker não consome eventos de atualização nem de categoria.
+* `worker`: consome `product.created`, `product.deleted` e `brand.created`. Sincroniza produtos e marcas no MongoDB; ao criar um produto, também grava o produto no Redis. Ao excluir, altera o status no MongoDB e remove a chave do produto no Redis. O worker não consome eventos de atualização nem de categoria.
 * `product-query`: API de leitura. Consulta o Redis primeiro e usa o MongoDB como fallback. Em caso de cache miss, grava o produto no Redis por 5 minutos.
 * PostgreSQL: banco relacional otimizado para a parte de comandos (escrita).
 * MongoDB: banco de documentos utilizado como modelo de leitura.
-* Redis: cache de produtos com TTL de 5 minutos. O Kong também mantém respostas GET em cache por 30 segundos.
+* Redis: cache de produtos com TTL de 5 minutos.
 * Kafka: transporte dos eventos de domínio entre o `product-command` e o `worker`.
 * Prometheus, Grafana, Loki e Jaeger: métricas, visualização, logs e traces. O Grafana provisiona os datasources diretamente; command e worker enviam traces ao Jaeger.
 
@@ -168,7 +168,7 @@ Exemplo abreviado da resposta:
 
 O GET ainda não retorna todos os campos aceitos no POST: o modelo de leitura não inclui `detailed_description` nem `fiscal.origin_code`. O worker e o modelo de leitura também representam `width`, `length`, quantidades de estoque, `icms_rate` e `ipi_rate` como inteiros; valores fracionários nesses campos podem impedir o processamento do evento pelo worker.
 
-O worker processa eventos de forma assíncrona, então o GET pode retornar `404` logo após o POST até a sincronização terminar. Não há invalidação ativa da chave Redis na exclusão: o cache pode continuar servindo o produto por até 5 minutos. O Kong mantém ainda o cache da resposta GET por 30 segundos.
+O worker processa eventos de forma assíncrona, então o GET pode retornar `404` logo após o POST até a sincronização terminar. Na exclusão, após processar o evento, o worker remove a chave do Redis antes de confirmar o evento Kafka; a próxima consulta busca o produto no MongoDB, onde produtos com status `DISABLED` não são retornados.
 
 ## Kafka
 
@@ -238,7 +238,7 @@ make migrate.diff
 ## Observações
 
 * Os serviços devem usar os nomes dos containers como hostnames quando executados no Compose (ex: `redis:6379`, `kafka1:9092`).
-* A sincronização PostgreSQL → Kafka → MongoDB/Redis é assíncrona. O worker ainda não invalida o Redis ao excluir produtos e não processa atualizações de produtos ou eventos de categorias.
+* A sincronização PostgreSQL → Kafka → MongoDB/Redis é assíncrona. O worker invalida o Redis ao excluir produtos, mas ainda não processa atualizações de produtos nem eventos de categorias.
 * Command e worker exportam traces para o Jaeger usando `JAEGER_URL`; o Grafana consulta Prometheus, Loki e Jaeger diretamente.
 
 ```
