@@ -4,11 +4,11 @@ Sistema de produtos baseado em CQRS (Command Query Responsibility Segregation), 
 
 ## Arquitetura
 
-O projeto separa escrita e leitura em serviços independentes, unificados por um API Gateway:
+O projeto separa escrita e leitura em serviços independentes, unificados pelo Kong API Gateway:
 
 ![Arquitetura da aplicacao](docs/architecture.png)
 
-Visão geral da arquitetura, destacando o Kong API Gateway como ponto de entrada. O gateway roteia as requisições de mutação (POST, PUT, DELETE) para o `product-command` e as de leitura (GET) para o `product-query`. A sincronização de dados é garantida pelo `worker`, que consome os tópicos do Kafka, atualiza o MongoDB e gerencia a invalidação do cache no Redis.
+O Kong encaminha `POST` e `DELETE` de produtos para o `product-command` e `GET` para o `product-query`. O `worker` sincroniza eventos de criação e exclusão de produtos com o MongoDB. O fluxo é assíncrono: logo após criar um produto, pode haver um intervalo até que ele esteja disponível para consulta.
 
 ## Modelo de dados
 
@@ -23,9 +23,9 @@ flowchart LR
 		Gateway -- GET --> Query[product-query]
 		Command --> Postgres[(PostgreSQL)]
 		Command --> Kafka[(Kafka)]
-		Kafka -- product.topics\ncategory.topics\nbrand.topics --> Worker[worker]
+		Kafka -- product.created\nproduct.deleted\nbrand.created --> Worker[worker]
 		Worker --> Mongo[(MongoDB)]
-		Worker -- Invalida cache --> Redis[(Redis com TTL)]
+		Worker -- Ao criar produto, grava no cache --> Redis[(Redis com TTL)]
 		Query --> Redis
 		Query --> Mongo
 		Redis --> Exporter[Redis Exporter]
@@ -42,14 +42,14 @@ flowchart LR
 ### Componentes
 
 * API Gateway (Kong): Ponto de entrada único. Roteia tráfego para os serviços de comandos ou consultas dependendo do método HTTP.
-* `product-command`: API de escrita. Persiste produtos, marcas e categorias no PostgreSQL e publica eventos no Kafka.
-* `worker`: consome eventos Kafka, sincroniza a base de leitura no MongoDB e **invalida o cache** no Redis quando há alterações.
-* `product-query`: API de leitura. Consulta Redis primeiro (cache-aside) e usa MongoDB como fallback, populando o cache com TTL em caso de miss.
+* `product-command`: API de escrita. Persiste produtos, marcas e categorias no PostgreSQL e publica eventos de domínio no Kafka.
+* `worker`: consome `product.created`, `product.deleted` e `brand.created`. Sincroniza produtos e marcas no MongoDB; ao processar a criação de um produto, também grava o produto no Redis. A exclusão altera o status no MongoDB, mas atualmente não remove a chave do Redis. O worker não consome eventos de atualização nem de categoria.
+* `product-query`: API de leitura. Consulta o Redis primeiro e usa o MongoDB como fallback. Em caso de cache miss, grava o produto no Redis por 5 minutos.
 * PostgreSQL: banco relacional otimizado para a parte de comandos (escrita).
 * MongoDB: banco de documentos utilizado como modelo de leitura.
-* Redis: cache de produtos com TTL de 5 minutos.
-* Kafka: transporte dos eventos de domínio agrupados por entidades.
-* OpenTelemetry, Prometheus, Grafana, Loki e Jaeger: stack unificada de observabilidade para métricas, logs estruturados e distributed tracing.
+* Redis: cache de produtos com TTL de 5 minutos. O Kong também mantém respostas GET em cache por 30 segundos.
+* Kafka: transporte dos eventos de domínio entre o `product-command` e o `worker`.
+* Prometheus, Grafana, Loki e Jaeger: métricas, visualização, logs e traces. O Grafana provisiona os datasources diretamente; command e worker enviam traces ao Jaeger.
 
 ## Requisitos
 
@@ -58,111 +58,129 @@ flowchart LR
 
 ## Executando com Docker
 
-Na raiz do projeto:
+Na raiz do projeto, use o Makefile:
 
 ```bash
-docker compose up --build
-
+make up
 ```
 
-Para executar em segundo plano:
+Para executar em segundo plano, acompanhar os logs ou consultar o estado:
 
 ```bash
-docker compose up -d --build
-
+make up-d
+make logs
+make logs SERVICE=product-query
+make ps
 ```
 
-Para acompanhar os logs:
+Para parar os serviços ou remover também os volumes persistentes:
 
 ```bash
-docker compose logs -f product-command product-query worker gateway
-
-```
-
-Para encerrar os containers:
-
-```bash
-docker compose down
-
-```
-
-Para remover também os volumes persistentes:
-
-```bash
-docker compose down -v
-
+make down
+make clean
 ```
 
 ## Endpoints
 
-Toda a comunicação externa deve ser feita através do API Gateway.
-
-### API de comandos (via Gateway)
+A comunicação externa é feita pelo Kong em `http://localhost:8000`. Atualmente, o gateway expõe apenas rotas de produtos:
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
-| `POST` | `/product/` | Cria um produto |
-| `PUT` | `/product/:id` | Atualiza um produto |
-| `DELETE` | `/product/:id` | Desativa um produto |
-| `POST` | `/brands/` | Cria uma marca |
-| `PUT` | `/brands/:id` | Atualiza uma marca |
-| `DELETE` | `/brands/:id` | Desativa uma marca |
-| `POST` | `/categories/` | Cria uma categoria |
-| `PUT` | `/categories/:id` | Atualiza uma categoria |
-| `DELETE` | `/categories/:id` | Desativa uma categoria |
+| `POST` | `/api/v1/product/` | Cria um produto |
+| `GET` | `/api/v1/product/:id` | Consulta um produto por UUID |
+| `DELETE` | `/api/v1/product/:id` | Desativa um produto |
 
-Exemplo de criação de produto via Gateway:
+O Kong também encaminha `PUT` para o serviço de comandos, mas o handler de produto ainda não registra essa rota. Marcas e categorias têm handlers no `product-command`, porém não estão expostas pelo Kong.
+
+O produto precisa referenciar `brand_id` e `category_id` já existentes no PostgreSQL. Exemplo de criação:
 
 ```bash
-curl -X POST http://localhost:8000/v1/product/ \
+curl -X POST http://localhost:8000/api/v1/product/ \
 	-H 'Content-Type: application/json' \
 	-d '{
-		"name": "Notebook",
-		"sku": "NOTEBOOK-001",
+		"brand_id": "b52694f9-7e1a-49dc-9931-8c0645ed9076",
+		"category_id": "61053615-c6ce-4b63-b139-adceef262a14",
+		"name": "Café Especial",
+		"sku": "CAF-ESP-504G",
+		"barcode_ean13": "7891020304050",
+		"short_description": "Café 100% arábica com notas de chocolate.",
+		"detailed_description": "Produzido em grandes altitudes, este café passa por um processo rigoroso de seleção de grãos para garantir a melhor experiência na sua xícara.",
 		"unit_of_measure": "UN",
-		"cost_price": 2500,
-		"sale_price": 3200,
+		"cost_price": 12.50,
+		"sale_price": 24.90,
+		"promotional_price": 21.90,
+		"gross_weight": 0.52,
+		"net_weight": 0.50,
+		"height": 18.5,
+		"width": 9.0,
+		"length": 6.0,
+		"status": "ACTIVE",
 		"stock": {
-			"quantity_available": 10,
-			"minimum_stock": 2
+			"location_aisle": "Corredor B - Prateleira 4",
+			"quantity_available": 150,
+			"minimum_stock": 20,
+			"maximum_stock": 500
 		},
-		"fiscal": {}
+		"fiscal": {
+			"ncm_code": "09012100",
+			"cest_code": "1709500",
+			"origin_code": 0,
+			"icms_rate": 18.0,
+			"pis_rate": 1.65,
+			"cofins_rate": 7.6,
+			"ipi_rate": 0.0
+		}
 	}'
-
 ```
 
-### API de consultas (via Gateway)
-
-| Método | Rota | Descrição |
-| --- | --- | --- |
-| `GET` | `/product/:id` | Consulta um produto por UUID |
-
-Exemplo:
+O GET usa o UUID retornado pelo POST e responde com um envelope `status`, `message` e `data`:
 
 ```bash
-curl http://localhost:8000/v1/product/<product-uuid>
-
+curl http://localhost:8000/api/v1/product/0823bdda-852a-4362-b6f1-b84d461ec8e1
 ```
 
-O fluxo de leitura implementa cache-aside: em requisições GET, o `product-query` consulta o Redis. Em caso de *cache miss*, consulta o MongoDB, grava o resultado no Redis (com TTL de 5 minutos) e retorna. Modificações (PUT/DELETE/POST) disparam eventos que fazem o `worker` **invalidar** ativamente esse cache.
+Exemplo abreviado da resposta:
+
+```json
+{
+  "status": 200,
+  "message": "product retrieved successfully",
+  "data": {
+    "id": "0823bdda-852a-4362-b6f1-b84d461ec8e1",
+    "name": "Café Especial",
+    "sku": "CAF-ESP-504G",
+    "stock": {
+      "quantity_available": 150,
+      "minimum_stock": 20,
+      "maximum_stock": 500
+    },
+    "fiscal": {
+      "ncm_code": "09012100",
+      "cest_code": "1709500",
+      "icms_rate": 18,
+      "pis_rate": 1.65,
+      "cofins_rate": 7.6,
+      "ipi_rate": 0
+    }
+  }
+}
+```
+
+O GET ainda não retorna todos os campos aceitos no POST: o modelo de leitura não inclui `detailed_description` nem `fiscal.origin_code`. O worker e o modelo de leitura também representam `width`, `length`, quantidades de estoque, `icms_rate` e `ipi_rate` como inteiros; valores fracionários nesses campos podem impedir o processamento do evento pelo worker.
+
+O worker processa eventos de forma assíncrona, então o GET pode retornar `404` logo após o POST até a sincronização terminar. Não há invalidação ativa da chave Redis na exclusão: o cache pode continuar servindo o produto por até 5 minutos. O Kong mantém ainda o cache da resposta GET por 30 segundos.
 
 ## Kafka
 
-O Compose cria as seguintes famílias de tópicos, que centralizam os eventos do domínio:
-
-* `product.topics` (incluindo created, updated, deleted)
-* `brand.topics`
-* `category.topics`
-
-O worker também utiliza tópicos `*.dlq` (Dead Letter Queue) quando configurados pelas variáveis de ambiente para lidar com falhas de processamento.
+O Compose cria os tópicos `product.created`, `product.update`, `product.deleted`, `brand.created` e `category.created`. Atualmente, o worker consome `product.created`, `product.deleted` e `brand.created`; não consome atualizações nem categorias. Além disso, a configuração padrão do consumidor de atualização espera `product.updated` (diferente do `product.update` criado pelo Compose), e esse consumidor não é iniciado pelo processo principal. Em caso de falha de processamento, o worker publica mensagens nas DLQs `product.dlq` e `brand.dlq`.
 
 ## Portas e ferramentas
 
 | Serviço | URL |
 | --- | --- |
 | API Gateway | `http://localhost:8000` |
-| Product Command | `http://localhost:8081` (Interno) |
-| Product Query | `http://localhost:8082` (Interno) |
+| Product Command | `8081` (interno no Compose; sem porta publicada no host) |
+| Product Query | `8082` (interno no Compose; sem porta publicada no host) |
 | Kafka UI | `http://localhost:8080` |
 | Grafana | `http://localhost:3000` |
 | Prometheus | `http://localhost:9090` |
@@ -175,7 +193,7 @@ Credenciais padrão do Grafana:
 * Usuário: `admin`
 * Senha: `admin`
 
-O Grafana provisiona automaticamente os datasources Prometheus, Loki e Jaeger via OpenTelemetry Collector.
+O Grafana provisiona automaticamente os datasources Prometheus, Loki e Jaeger. O Compose não possui um serviço OpenTelemetry Collector.
 
 ## Variáveis principais
 
@@ -187,7 +205,7 @@ Os valores abaixo já possuem defaults para o ambiente Docker:
 | `KAFKA_BROKERS` | `kafka1:9092` |
 | `REDIS_HOST` | `redis:6379` |
 | `MONGO_DB_DSN` | `mongodb://root:MongoDB2019!@mongo:27017/?authSource=admin` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `otel-collector:4317` |
+| `JAEGER_URL` | `jaeger:4317` |
 
 ## Desenvolvimento local
 
@@ -220,8 +238,8 @@ make migrate.diff
 ## Observações
 
 * Os serviços devem usar os nomes dos containers como hostnames quando executados no Compose (ex: `redis:6379`, `kafka1:9092`).
-* A consistência do cache Redis é mantida primariamente pelo `worker`, que realiza a **invalidação da chave** no momento em que um evento de atualização ou exclusão é processado, além da segurança extra do TTL de 5 minutos.
-* Toda a emissão de traces e logs estruturados é roteada padronizadamente pelo OpenTelemetry.
+* A sincronização PostgreSQL → Kafka → MongoDB/Redis é assíncrona. O worker ainda não invalida o Redis ao excluir produtos e não processa atualizações de produtos ou eventos de categorias.
+* Command e worker exportam traces para o Jaeger usando `JAEGER_URL`; o Grafana consulta Prometheus, Loki e Jaeger diretamente.
 
 ```
 
