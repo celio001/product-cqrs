@@ -10,6 +10,12 @@ O projeto separa escrita e leitura em serviços independentes, unificados por um
 
 Visão geral da arquitetura, destacando o Kong API Gateway como ponto de entrada. O gateway roteia as requisições de mutação (POST, PUT, DELETE) para o `product-command` e as de leitura (GET) para o `product-query`. A sincronização de dados é garantida pelo `worker`, que consome os tópicos do Kafka, atualiza o MongoDB e gerencia a invalidação do cache no Redis.
 
+## Modelo de dados
+
+O diagrama abaixo apresenta as tabelas do banco relacional e seus relacionamentos, incluindo as categorias, marcas, produtos, estoque e dados fiscais.
+
+![Tabelas e relacionamentos do banco de dados](docs/tables.png)
+
 ```mermaid
 flowchart LR
 		Client[Cliente] --> Gateway[API Gateway\nKong]
